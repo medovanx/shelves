@@ -18,8 +18,8 @@ sealed partial class ShelfWindow : Form
     /// <summary>Roll state shown now: 0 rolled up, 1 open. Animates toward the model's state (or a peek).</summary>
     double shown = 1;
     bool peeking;
-    readonly System.Windows.Forms.Timer anim = new() { Interval = 15 };
-    readonly System.Windows.Forms.Timer hover = new() { Interval = 100 };
+    readonly System.Windows.Forms.Timer anim = new() { Interval = 10 };
+    readonly System.Windows.Forms.Timer hover = new() { Interval = 30 };
     DateTime animStart; double animFrom;
     DateTime? enteredAt, leftAt;
 
@@ -63,7 +63,7 @@ sealed partial class ShelfWindow : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { anim.Dispose(); hover.Dispose(); watcher?.Dispose(); portalTimer.Dispose(); }
+        if (disposing) { anim.Dispose(); hover.Dispose(); openFrame?.Dispose(); watcher?.Dispose(); portalTimer.Dispose(); }
         base.Dispose(disposing);
     }
 
@@ -156,6 +156,7 @@ sealed partial class ShelfWindow : Form
         if (!Native.AnimationsOn() || !Visible) { shown = target; anim.Stop(); LayoutItems(); Apply(); return; }
         animFrom = shown;
         animStart = DateTime.UtcNow;
+        if (!anim.Enabled) CacheOpenFrame();
         anim.Start();
     }
 
@@ -163,7 +164,7 @@ sealed partial class ShelfWindow : Form
     {
         double t = Math.Min(1, (DateTime.UtcNow - animStart).TotalMilliseconds / 150.0);
         shown = animFrom + (animTarget - animFrom) * t;
-        if (t >= 1) { shown = animTarget; anim.Stop(); }
+        if (t >= 1) { shown = animTarget; anim.Stop(); openFrame?.Dispose(); openFrame = null; }
         Apply();
     }
 

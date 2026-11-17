@@ -42,7 +42,13 @@ sealed partial class ShelfWindow
         _ => Cursors.Default,
     };
 
-    protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hot = true; Apply(); }
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        hot = true;
+        HoverTick(); // start the hover delay now, not at the next timer tick
+        if (!anim.Enabled) Apply();
+    }
 
     protected override void OnMouseLeave(EventArgs e)
     {

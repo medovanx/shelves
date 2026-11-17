@@ -126,4 +126,43 @@ public class ModelTests
         small.Shelves.Add(new ShelfModel { Items = ["a", "b"] });
         Assert.False(Health.LooksScrambled(small, new HashSet<string>())); // fewer than 3
     }
+
+    [Fact]
+    public void Settings_from_version_1_get_the_faster_defaults_unless_changed()
+    {
+        var old = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 300, LeaveDelayMs = 500, Opacity = 55 });
+        Assert.Equal(150, old.HoverDelayMs);
+        Assert.Equal(300, old.LeaveDelayMs);
+        Assert.Equal(60, old.Opacity);
+        var mine = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 700, Opacity = 30 });
+        Assert.Equal(700, mine.HoverDelayMs);
+        Assert.Equal(30, mine.Opacity);
+    }
+
+    [Theory]
+    [InlineData("#1a2b3c", "#1A2B3C")]
+    [InlineData("1a2b3c", "#1A2B3C")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    [InlineData("#12345", "")]
+    [InlineData("#GGGGGG", "")]
+    public void Colors_normalize(string? input, string expected) => Assert.Equal(expected, Colors.Normalize(input));
+
+    [Fact]
+    public void Colors_parse_and_pick_readable_text()
+    {
+        Assert.Equal((26, 43, 60), Colors.Parse("#1A2B3C"));
+        Assert.Null(Colors.Parse("nope"));
+        Assert.True(Colors.IsLight(236, 238, 242));
+        Assert.False(Colors.IsLight(46, 54, 72));
+        Assert.All(Colors.Presets, p => Assert.Equal(p.Hex, Colors.Normalize(p.Hex)));
+    }
+
+    [Fact]
+    public void Shelf_colour_and_opacity_survive_clone()
+    {
+        var m = new ShelfModel { Tint = "#5E1F32", Opacity = 80 }.Clone();
+        Assert.Equal("#5E1F32", m.Tint);
+        Assert.Equal(80, m.Opacity);
+    }
 }

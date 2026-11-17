@@ -27,11 +27,15 @@ public sealed class ShelfModel
     public List<string> Items { get; set; } = [];
     /// <summary>A folder shown live instead of desktop items, or null.</summary>
     public string? Portal { get; set; }
+    /// <summary>This shelf's own colour ("#RRGGBB"), or null to use the setting for all shelves.</summary>
+    public string? Tint { get; set; }
+    /// <summary>This shelf's own opacity (0 to 100), or null to use the setting for all shelves.</summary>
+    public int? Opacity { get; set; }
 
     public ShelfModel Clone() => new()
     {
         Id = Id, Title = Title, Monitor = Monitor, Rel = Rel, Edge = Edge, Rolled = Rolled,
-        IconSize = IconSize, Sort = Sort, Items = [.. Items], Portal = Portal,
+        IconSize = IconSize, Sort = Sort, Items = [.. Items], Portal = Portal, Tint = Tint, Opacity = Opacity,
     };
 }
 

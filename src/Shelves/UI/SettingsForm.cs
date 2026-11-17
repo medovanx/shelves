@@ -14,6 +14,7 @@ sealed class SettingsForm : Form
     readonly ToggleSwitch tglStartup = new(), tglDoubleClick = new();
     // Appearance
     readonly ThemedNumber numOpacity = Num(0, 100), numRadius = Num(0, 16), numLines = Num(1, 3);
+    readonly SwatchPicker swatches = new();
     readonly Segmented segAlign = new(L.T("AlignLeft"), L.T("AlignCenter"), L.T("AlignRight")) { Width = 260 };
     readonly Segmented segSize = new(L.T("SizeSmall"), L.T("SizeMedium"), L.T("SizeLarge")) { Width = 260 };
     // Roll up
@@ -133,11 +134,14 @@ sealed class SettingsForm : Form
     {
         numOpacity.Value = s.Opacity;
         numOpacity.Increment = 5;
+        swatches.Theme = t;
+        swatches.Value = s.Tint;
         numRadius.Value = s.CornerRadius;
         numLines.Value = s.LabelLines;
         segAlign.Selected = (int)s.TitleAlign;
         segSize.Selected = (int)s.DefaultIconSize;
         AddPage("", L.T("Appearance"), Card(L.T("Appearance"), "",
+            Row(L.T("ShelfColor"), swatches),
             Row(L.T("Opacity"), numOpacity),
             Row(L.T("CornerRadius"), numRadius),
             Row(L.T("TitleAlign"), segAlign),
@@ -281,6 +285,7 @@ sealed class SettingsForm : Form
         s.StartWithWindows = tglStartup.Checked;
         s.DoubleClickHides = tglDoubleClick.Checked;
         s.Opacity = (int)numOpacity.Value;
+        s.Tint = swatches.Value;
         s.CornerRadius = (int)numRadius.Value;
         s.LabelLines = (int)numLines.Value;
         s.TitleAlign = (TitleAlign)segAlign.Selected;

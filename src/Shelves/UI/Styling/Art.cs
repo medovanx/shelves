@@ -141,6 +141,20 @@ static class Art
         g.FillPath(b, p);
     }
 
+    /// <summary>A rectangle with only some corners rounded (the ones against a screen edge stay square).</summary>
+    public static GraphicsPath RoundRect(RectangleF r, float rad, bool tl, bool tr, bool br, bool bl)
+    {
+        var p = new GraphicsPath();
+        float d = Math.Min(rad * 2, Math.Min(r.Width, r.Height));
+        if (d <= 0) { p.AddRectangle(r); return p; }
+        if (tl) p.AddArc(r.Left, r.Top, d, d, 180, 90); else p.AddLine(r.Left, r.Top, r.Left, r.Top);
+        if (tr) p.AddArc(r.Right - d, r.Top, d, d, 270, 90); else p.AddLine(r.Right, r.Top, r.Right, r.Top);
+        if (br) p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); else p.AddLine(r.Right, r.Bottom, r.Right, r.Bottom);
+        if (bl) p.AddArc(r.Left, r.Bottom - d, d, d, 90, 90); else p.AddLine(r.Left, r.Bottom, r.Left, r.Bottom);
+        p.CloseFigure();
+        return p;
+    }
+
     public static GraphicsPath RoundRect(RectangleF r, float rad)
     {
         var p = new GraphicsPath();

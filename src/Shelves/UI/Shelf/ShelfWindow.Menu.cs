@@ -39,6 +39,8 @@ sealed partial class ShelfWindow
             Item(L.T("SizeSmall"), null, () => SetIconSize(IconSize.Small), Model.IconSize == IconSize.Small),
             Item(L.T("SizeMedium"), null, () => SetIconSize(IconSize.Medium), Model.IconSize == IconSize.Medium),
             Item(L.T("SizeLarge"), null, () => SetIconSize(IconSize.Large), Model.IconSize == IconSize.Large)));
+        m.Items.Add(ColorMenu());
+        m.Items.Add(OpacityMenu());
         m.Items.Add(new ToolStripSeparator());
         if (Model.Portal == null)
             m.Items.Add(Item(L.T("MakePortal"), Art.IconFolder, ChoosePortal));
@@ -59,6 +61,60 @@ sealed partial class ShelfWindow
         m.Closed += (_, _) => { menuOpen = false; BeginInvoke(() => m.Dispose()); };
         m.Show(screen);
     }
+
+    ToolStripMenuItem ColorMenu()
+    {
+        var menu = new ToolStripMenuItem(L.T("ShelfColor")) { Tag = new ThemedMenuRenderer.MenuGlyph("\uE790") };
+        void Add(string text, string? hex, Color? swatch)
+        {
+            var it = new ToolStripMenuItem(text) { Checked = Model.Tint == hex };
+            if (swatch is { } c) it.Tag = new ThemedMenuRenderer.MenuGlyph("\uEA3B", c); // a filled circle
+            it.Click += (_, _) => SetTint(hex);
+            menu.DropDownItems.Add(it);
+        }
+        Add(L.T("UseDefault"), null, null);
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        Add(L.T("ThemeColor"), Colors.ToHex(app.Theme.Window.R, app.Theme.Window.G, app.Theme.Window.B), app.Theme.Window);
+        foreach (var (key, hex) in Colors.Presets)
+        {
+            var c = Colors.Parse(hex)!.Value;
+            Add(L.T("Color" + key), hex, Color.FromArgb(c.R, c.G, c.B));
+        }
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        var custom = new ToolStripMenuItem(L.T("CustomColor"))
+        {
+            Checked = Model.Tint != null && !Colors.Presets.Any(p => p.Hex == Model.Tint) && Model.Tint != Colors.ToHex(app.Theme.Window.R, app.Theme.Window.G, app.Theme.Window.B),
+        };
+        custom.Click += (_, _) =>
+        {
+            using var dlg = new ColorDialog { FullOpen = true, AnyColor = true };
+            if (Colors.Parse(Model.Tint) is { } c) dlg.Color = Color.FromArgb(c.R, c.G, c.B);
+            menuOpen = true;
+            try { if (dlg.ShowDialog(this) == DialogResult.OK) SetTint(Colors.ToHex(dlg.Color.R, dlg.Color.G, dlg.Color.B)); }
+            finally { menuOpen = false; }
+        };
+        menu.DropDownItems.Add(custom);
+        return menu;
+    }
+
+    ToolStripMenuItem OpacityMenu()
+    {
+        var menu = new ToolStripMenuItem(L.T("ShelfOpacity")) { Tag = new ThemedMenuRenderer.MenuGlyph("\uE706") };
+        var def = new ToolStripMenuItem(L.T("UseDefault") + $"  ({app.Settings.Opacity}%)") { Checked = Model.Opacity == null };
+        def.Click += (_, _) => SetOpacity(null);
+        menu.DropDownItems.Add(def);
+        menu.DropDownItems.Add(new ToolStripSeparator());
+        foreach (int v in new[] { 0, 20, 40, 60, 80, 100 })
+        {
+            var it = new ToolStripMenuItem($"{v}%") { Checked = Model.Opacity == v };
+            it.Click += (_, _) => SetOpacity(v);
+            menu.DropDownItems.Add(it);
+        }
+        return menu;
+    }
+
+    void SetTint(string? hex) { Model.Tint = hex == null ? null : Colors.Normalize(hex); app.SaveSoon(); Apply(); }
+    void SetOpacity(int? v) { Model.Opacity = v; app.SaveSoon(); Apply(); }
 
     void SetSort(SortBy s) { Model.Sort = s; app.SaveSoon(); LoadItems(); }
     void SetIconSize(IconSize s) { Model.IconSize = s; app.SaveSoon(); LayoutItems(); Apply(); }

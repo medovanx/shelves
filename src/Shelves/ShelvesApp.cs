@@ -48,7 +48,7 @@ sealed class ShelvesApp : ApplicationContext
         ShotMode = shot;
         Directory.CreateDirectory(Dir);
         Settings = shot ? new Settings() : Settings.Load(SettingsPath);
-        if (!shot) L.Apply(Settings.Language);
+        if (!shot) { L.Apply(Settings.Language); SaveSettings(); } // writes back any upgrade from an older version
         Layout = shot ? new Layout() : LayoutStore.Load(LayoutPath);
         Keeper = new IconKeeper(View, () => Layout);
         Keeper.HomesChanged += SaveSoon;
