@@ -118,7 +118,7 @@ static class Shots
         var sets = new Dictionary<string, string[]>
         {
             ["Work"] = ["Quarterly report.docx", "Budget.xlsx", "Roadmap.pdf", "Meeting notes.txt", "Pitch.pptx", "Contracts/"],
-            ["Media"] = ["Sunset.png", "Mountains.png", "Holiday.mp4", "Podcast.mp3"],
+            ["Media"] = ["Sunset.png", "Hills.png", "Holiday.mp4", "Podcast.mp3"],
             ["Projects"] = ["Website/", "Mobile app/", "Design.png", "Ideas.txt"],
             ["Tools"] = ["Scripts/", "setup.ps1", "config.json"],
             ["Archive"] = ["2025/", "2024/", "Old photos.zip"],

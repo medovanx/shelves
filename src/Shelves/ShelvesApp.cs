@@ -74,6 +74,8 @@ sealed class ShelvesApp : ApplicationContext
         saveTimer.Tick += (_, _) => { saveTimer.Stop(); SaveNow(); };
         slowTimer.Tick += (_, _) => SlowTick();
         Wallpaper.Changed += () => { foreach (var w in Windows) w.Repaint(); };
+        // Signing out or shutting down: put every icon back first, so the desktop is never left with hidden icons.
+        SystemEvents.SessionEnding += (_, _) => { SaveNow(); RestoreExplorer(); };
         SystemEvents.DisplaySettingsChanged += (_, _) => messages.Invoker.BeginInvoke(DisplayChanged);
         SystemEvents.UserPreferenceChanged += (_, e) => messages.Invoker.BeginInvoke(() => PreferenceChanged(e.Category));
 
@@ -213,10 +215,11 @@ sealed class ShelvesApp : ApplicationContext
             if (Layout.Rename(e.OldFullPath, e.FullPath)) SaveSoon();
             Keeper.Sync();
         });
+        // A deleted item stays in its shelf's list but is not shown: launchers often delete a shortcut and write
+        // it again on update, and it should come back to the same shelf.
         w.Deleted += (_, e) => messages.Invoker.BeginInvoke(() =>
         {
             IconCache.Forget(e.FullPath);
-            if (Layout.Unshelve(e.FullPath) != null) { Layout.Home.Remove(e.FullPath); SaveSoon(); }
             Keeper.Sync();
         });
         w.Changed += (_, e) => messages.Invoker.BeginInvoke(() => IconCache.Forget(e.FullPath));

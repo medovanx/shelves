@@ -46,7 +46,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             {
                 // Out of every shelf but still hidden (a shelf was deleted while Explorer was busy, or Shelves
                 // stopped mid-way): bring it home.
-                var to = l.Home.TryGetValue(it.Name, out var h) && !taken.Contains(h) ? h : FreeSpot(taken);
+                var to = l.Home.TryGetValue(it.Name, out var h) && !taken.Contains(h) && OnScreen(h) ? h : FreeSpot(taken);
                 view.Move(it.Index, to);
                 taken.Add(to);
                 homes |= l.Home.Remove(it.Name);
@@ -82,7 +82,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var it = items.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
         if (it == null) { if (l.Home.Remove(name)) HomesChanged?.Invoke(); return; }
         var taken = items.Where(i => !DesktopView.IsParked(i.Pos)).Select(i => i.Pos).ToList();
-        var to = listViewPos ?? (l.Home.TryGetValue(name, out var h) && !taken.Contains(h) ? h : FreeSpot(taken));
+        var to = listViewPos ?? (l.Home.TryGetValue(name, out var h) && !taken.Contains(h) && OnScreen(h) ? h : FreeSpot(taken));
         view.Move(it.Index, to);
         l.Home.Remove(name);
         lastParked = Math.Max(0, lastParked - 1);
@@ -98,11 +98,23 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var taken = items.Where(i => !DesktopView.IsParked(i.Pos)).Select(i => i.Pos).ToList();
         foreach (var it in items.Where(i => DesktopView.IsParked(i.Pos)))
         {
-            var to = l.Home.TryGetValue(it.Name, out var h) && !taken.Contains(h) ? h : FreeSpot(taken);
+            var to = l.Home.TryGetValue(it.Name, out var h) && !taken.Contains(h) && OnScreen(h) ? h : FreeSpot(taken);
             view.Move(it.Index, to);
             taken.Add(to);
         }
         lastParked = 0;
+    }
+
+    /// <summary>
+    /// True when a saved list-view position still lands on a monitor. Monitors come and go (and the list view's
+    /// origin moves with the leftmost one), so an old position can point off screen; such icons get a free spot.
+    /// </summary>
+    bool OnScreen(Pt p)
+    {
+        var o = view.Origin;
+        var sp = view.Spacing;
+        var r = new Rectangle(o.X + p.X, o.Y + p.Y, sp.Width, sp.Height);
+        return Screen.AllScreens.Any(s => s.WorkingArea.Contains(r.X + r.Width / 2, r.Y + r.Height / 2));
     }
 
     /// <summary>The first grid cell (column by column from the top-left, like Explorer) with no visible icon in it.</summary>

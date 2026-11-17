@@ -55,8 +55,8 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
 
 - **FR-5:** Files stay in the Desktop folders, both the user's and Public. A shelf draws the items that belong to it, using the shell's own icon, thumbnail and display name.
 - **FR-6:** Windows' copy of a shelved icon is hidden from the desktop.
-  - This uses the shell's `IFolderView`, which moves the item off the visible area. Nothing is injected into Explorer.
-  - Every item is put back if the app quits or crashes. The next start and a "Restore desktop" item in the tray menu both handle this.
+  - Shelves reads the desktop through the shell's `IFolderView2` and parks the icon far off screen with the desktop list view's `LVM_SETITEMPOSITION`. Nothing is injected into Explorer.
+  - Every item is put back when Shelves exits or Windows signs out. After a crash, icons stay hidden until Shelves starts again (it keeps them in their shelves), or the user picks Exit or "Restore desktop".
 - **FR-7:** Icons can be dragged:
   - from the desktop into a shelf
   - between shelves
@@ -68,7 +68,7 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
   - F2 renames it and Delete sends it to the Recycle Bin.
   - Ctrl+click and a drag box select several icons.
   - Dragging an icon onto another app works.
-- **FR-9:** The app watches the Desktop folders. A shelved file that is renamed stays in its shelf, and one that is deleted leaves it. A new file goes onto the desktop and is not shelved.
+- **FR-9:** The app watches the Desktop folders. A shelved file that is renamed stays in its shelf. One that is deleted is no longer shown, but keeps its place, so a shortcut that a launcher deletes and writes again comes back to the same shelf. A new file goes onto the desktop and is not shelved.
 
 ### 4.3 Roll up
 
@@ -117,7 +117,7 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
 
 - **FR-22:** The user can save a named snapshot and restore it from the tray menu.
 - **FR-23:** The app takes an automatic snapshot each day and before every update, and keeps the last 10.
-- **FR-24:** If many shelved items look wrong at once, the app offers to restore the last good snapshot. For example, after Explorer restarts or a resolution change scrambles the desktop.
+- **FR-24:** If most shelved items are missing from the desktop when Shelves connects to it, it warns from the tray, so the user can restore a snapshot.
 
 ### 4.9 Tray and settings
 
@@ -140,10 +140,10 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
 
 ## 5. Look
 
-- **UI-1:** A shelf has a translucent acrylic background (DWM backdrop blur) tinted to the theme, rounded corners (8 px) and a 1 px border.
+- **UI-1:** A shelf has a frosted-glass background (a blurred copy of the wallpaper, drawn by Shelves) tinted to the theme, rounded corners (8 px) and a 1 px border.
   - The title is centred, or turned sideways on a vertical tab.
   - A thin accent line runs under the title while the mouse is over the shelf.
-- **UI-2:** Icon labels match the desktop's: white text with a shadow, wrapped to two lines and cut off with an ellipsis.
+- **UI-2:** Icon labels use the theme's text colour (readable on both the dark and the light glass), wrapped to the chosen number of lines and cut off with an ellipsis.
 - **UI-3:** The app is DPI aware per monitor (PerMonitorV2), so everything stays sharp when a shelf moves between monitors with different scaling.
 - **UI-4:** No "·" or em dash appears anywhere in the UI text.
 
@@ -168,6 +168,8 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
 
 ## 7. Out of scope for v1
 
+- Rolling up automatically after a few seconds without the mouse (offered, not chosen yet)
+
 - Rules that file new items automatically
 - Tabs inside a shelf
 - Desktop pages you swipe between
@@ -178,9 +180,9 @@ Shelves groups desktop icons into translucent boxes ("shelves") on the Windows d
 
 | Risk | Mitigation |
 |---|---|
-| Hiding Explorer's icons through `IFolderView` can break with auto-arrange or align-to-grid on. | Turn auto-arrange off while Shelves runs, and restore the user's setting on exit. |
+| Auto-arrange puts parked icons straight back. | Shelves turns auto-arrange off while it runs and restores the user's setting on exit. |
 | Explorer moves icons back after it restarts. | Re-apply the layout on `TaskbarCreated` (NFR-3), with snapshots as a fallback. |
-| Acrylic blur costs GPU on old machines. | Fall back to a solid themed background when transparency effects are off. |
+| Windows' own blur does not reach per-pixel-alpha windows. | Shelves blurs the wallpaper itself, and uses a solid background when transparency effects are off. |
 
 ## 9. Spike results (2026-11-17, Windows build 26300)
 
