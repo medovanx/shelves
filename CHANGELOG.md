@@ -3,7 +3,7 @@
 All notable changes to Shelves are listed here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.0] - 2026-11-17
 
 ### Added
 - "New shelf" in the desktop's own right-click menu (Settings, General; Windows asks for admin rights once).
@@ -11,7 +11,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Pin a shelf open so it never rolls up.
 
 ### Changed
-- The tray menu's first line reads "Shelves v1.0.1".
+- The tray menu's first line reads "Shelves v" and the version.
 
 ## [1.0.1] - 2026-11-17
 
@@ -38,5 +38,6 @@ The first release.
 - Import from Stardock Fences.
 - Settings in English and Arabic, start with Windows, and automatic updates from GitHub Releases.
 
+[1.1.0]: https://github.com/medovanx/shelves/releases/tag/v1.1.0
 [1.0.1]: https://github.com/medovanx/shelves/releases/tag/v1.0.1
 [1.0.0]: https://github.com/medovanx/shelves/releases/tag/v1.0.0
