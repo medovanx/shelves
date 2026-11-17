@@ -11,7 +11,7 @@ sealed class SettingsForm : Form
 
     // General
     readonly ThemedCombo cmbLang = Combo();
-    readonly ToggleSwitch tglStartup = new(), tglDoubleClick = new();
+    readonly ToggleSwitch tglStartup = new(), tglDoubleClick = new(), tglDesktopMenu = new();
     // Appearance
     readonly ThemedNumber numOpacity = Num(0, 100), numRadius = Num(0, 16), numLines = Num(1, 3);
     readonly SwatchPicker swatches = new();
@@ -123,10 +123,12 @@ sealed class SettingsForm : Form
         cmbLang.Items.AddRange([L.T("LangAuto"), "English", "العربية"]);
         cmbLang.SelectedIndex = s.Language switch { "en" => 1, "ar" => 2, _ => 0 };
         tglStartup.Checked = s.StartWithWindows;
+        tglDesktopMenu.Checked = DesktopMenu.Installed();
         tglDoubleClick.Checked = s.DoubleClickHides;
         AddPage(Art.IconSettings, L.T("General"), Card(L.T("General"), Art.IconSettings,
             Row(L.T("Language"), cmbLang),
             Row(L.T("StartWithWindows"), tglStartup),
+            Row(L.T("DesktopMenu"), tglDesktopMenu),
             Row(L.T("DoubleClickHides"), tglDoubleClick)));
     }
 
@@ -285,6 +287,14 @@ sealed class SettingsForm : Form
         string oldLang = s.Language;
         s.Language = cmbLang.SelectedIndex switch { 1 => "en", 2 => "ar", _ => "" };
         s.StartWithWindows = tglStartup.Checked;
+        if (tglDesktopMenu.Checked != DesktopMenu.Installed())
+        {
+            // Machine-wide, so Windows asks for admin rights; if refused, it stays as it was.
+            if (!DesktopMenu.Set(tglDesktopMenu.Checked))
+                MessageBox.Show(this, L.T("DesktopMenuFailed"), L.T("AppName"), MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1,
+                    L.Ar ? MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign : 0);
+        }
+        s.DesktopMenu = DesktopMenu.Installed();
         s.DoubleClickHides = tglDoubleClick.Checked;
         s.Opacity = (int)numOpacity.Value;
         s.Tint = swatches.Value;

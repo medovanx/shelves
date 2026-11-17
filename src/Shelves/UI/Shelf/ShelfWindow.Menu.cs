@@ -21,7 +21,9 @@ sealed partial class ShelfWindow
         }
 
         m.Items.Add(Item(L.T("Rename"), Art.IconRename, BeginTitleRename));
-        m.Items.Add(Item(L.T(Model.Rolled ? "Unroll" : "RollUp"), Art.IconRoll, () => SetRolled(!Model.Rolled)));
+        if (!Model.Pinned)
+            m.Items.Add(Item(L.T(Model.Rolled ? "Unroll" : "RollUp"), Art.IconRoll, () => SetRolled(!Model.Rolled)));
+        m.Items.Add(Item(L.T("PinOpen"), Art.IconPin, TogglePin, Model.Pinned));
         m.Items.Add(Sub(L.T("Dock"), Art.IconDock,
             Item(L.T("DockLeft"), null, () => DockTo(Edge.Left), Model.Edge == Edge.Left),
             Item(L.T("DockTop"), null, () => DockTo(Edge.Top), Model.Edge == Edge.Top),
@@ -116,6 +118,14 @@ sealed partial class ShelfWindow
 
     void SetTint(string? hex) { Model.Tint = hex == null ? null : Colors.Normalize(hex); app.SaveSoon(); Apply(); }
     void SetOpacity(int? v) { Model.Opacity = v; app.SaveSoon(); Apply(); }
+
+    void TogglePin()
+    {
+        Model.Pinned = !Model.Pinned;
+        if (Model.Pinned && Model.Rolled) SetRolled(false);
+        app.SaveSoon();
+        Apply();
+    }
 
     void SetSort(SortBy s) { Model.Sort = s; app.SaveSoon(); LoadItems(); }
     void SetIconSize(IconSize s) { Model.IconSize = s; app.SaveSoon(); LayoutItems(); Apply(); }

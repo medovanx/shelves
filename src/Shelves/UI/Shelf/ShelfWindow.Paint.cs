@@ -198,6 +198,13 @@ sealed partial class ShelfWindow
             using var tb = new SolidBrush(TextColor);
             g.DrawString(text, titleFont, tb, tr, sf);
             if (portalButton is { } pb && IsOpen) Art.GlyphCentered(g, Art.IconOpen, 13 * s, pb, hotPortal ? Th.Accent : DimColor);
+            if (Model.Pinned)
+            {
+                // A small pin at the title's start, so a pinned shelf is told apart from one that can roll up.
+                int pw = (int)(24 * s);
+                var pr = new Rectangle(L.Ar ? box.W - pw - (int)(6 * s) : (int)(6 * s), title.Y + (title.Height - pw) / 2, pw, pw);
+                Art.GlyphCentered(g, Art.IconPin, 11 * s, pr, DimColor);
+            }
 
             // A faint line between title and icons while open.
             if (shown > 0.05)

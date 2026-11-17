@@ -33,6 +33,8 @@ public sealed class ShelfModel
     public RelBox Rel { get; set; }
     public Edge Edge { get; set; }
     public bool Rolled { get; set; }
+    /// <summary>Pinned open: never rolls up.</summary>
+    public bool Pinned { get; set; }
     public IconSize IconSize { get; set; } = IconSize.Medium;
     public SortBy Sort { get; set; }
     public List<ShelfTab> Tabs { get; set; } = [new()];
@@ -82,7 +84,7 @@ public sealed class ShelfModel
 
     public ShelfModel Clone() => new()
     {
-        Id = Id, Title = Title, Monitor = Monitor, Rel = Rel, Edge = Edge, Rolled = Rolled,
+        Id = Id, Title = Title, Monitor = Monitor, Rel = Rel, Edge = Edge, Rolled = Rolled, Pinned = Pinned,
         IconSize = IconSize, Sort = Sort, Tabs = Tabs.Select(t => t.Clone()).ToList(), Active = Active, Tint = Tint, Opacity = Opacity,
     };
 }

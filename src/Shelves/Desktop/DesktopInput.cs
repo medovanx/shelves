@@ -29,6 +29,8 @@ sealed class DesktopInput : IDisposable
     public event Action? DesktopDoubleClick;
     /// <summary>The left button went up after being pressed on the desktop (an icon may have been dropped).</summary>
     public event Action<bool>? DesktopRelease;
+    /// <summary>A plain right-click on the empty desktop (Explorer's menu opens there).</summary>
+    public event Action<Point>? DesktopRightClick;
     /// <summary>Set by the app: the desktop list view, frozen for the moment a dragged icon is dropped.</summary>
     public Func<IntPtr> ListView { get; set; } = () => IntPtr.Zero;
     /// <summary>Set by the app: true while icons are shelved (only then is there anything to hide).</summary>
@@ -85,7 +87,8 @@ sealed class DesktopInput : IDisposable
                     {
                         state = State.None;
                         // Not a drag after all: give Explorer its right-click back.
-                        invoker.BeginInvoke(ReplayRightClick);
+                        var at = start;
+                        invoker.BeginInvoke(() => { DesktopRightClick?.Invoke(at); ReplayRightClick(); });
                         return 1;
                     }
                     if (state == State.Drawing)

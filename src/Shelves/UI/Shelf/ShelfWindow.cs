@@ -32,6 +32,7 @@ sealed partial class ShelfWindow : Form
         StartPosition = FormStartPosition.Manual;
         AllowDrop = true;
         KeyPreview = true;
+        if (model.Pinned) model.Rolled = false;
         shown = model.Rolled ? 0 : 1;
         anim.Tick += (_, _) => Animate();
         hover.Tick += (_, _) => HoverTick();
@@ -150,6 +151,7 @@ sealed partial class ShelfWindow : Form
 
     public void SetRolled(bool rolled)
     {
+        if (rolled && Model.Pinned) return; // pinned open
         Model.Rolled = rolled;
         peeking = false;
         app.SaveSoon();

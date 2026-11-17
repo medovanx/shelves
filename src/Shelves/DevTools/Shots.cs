@@ -85,7 +85,7 @@ static class Shots
         var specs = new (ShelfModel m, Box box, double roll, bool hot)[]
         {
             (Tabbed(L.Ar ? "العمل" : "Work", (L.Ar ? "المستندات" : "Documents", P("Work")), (L.Ar ? "المشاريع" : "Projects", P("Projects")), (L.Ar ? "الأدوات" : "Tools", P("Tools"))), new Box(mon.X + 360, mon.Y + 90, 420, 340), 1, true),
-            (new ShelfModel { Title = L.Ar ? "الوسائط" : "Media", Portal = P("Media"), Tint = "#5E1F32", Opacity = 70 }, new Box(mon.X + 830, mon.Y + 90, 380, 240), 1, false),
+            (new ShelfModel { Title = L.Ar ? "الوسائط" : "Media", Portal = P("Media"), Tint = "#5E1F32", Opacity = 70, Pinned = true }, new Box(mon.X + 830, mon.Y + 90, 380, 240), 1, false),
             (new ShelfModel { Title = L.Ar ? "المشاريع" : "Projects", Portal = P("Projects"), Edge = Edge.Left, Tint = "#145A5A", Opacity = 55 }, new Box(mon.X, mon.Y + 300, 300, 360), 1, false),
             (new ShelfModel { Title = L.Ar ? "الأدوات" : "Tools", Portal = P("Tools"), Edge = Edge.Right, Rolled = true }, new Box(mon.Right - 300, mon.Y + 260, 300, 330), 0, false),
             (new ShelfModel { Title = L.Ar ? "الأرشيف" : "Archive", Portal = P("Archive"), Edge = Edge.Bottom, Rolled = true, IconSize = IconSize.Small }, new Box(mon.X + 520, mon.Bottom - 48 - 260, 440, 260), 0, false),

@@ -10,6 +10,8 @@ public sealed class Settings
     /// <summary>"en" or "ar"; empty follows Windows.</summary>
     public string Language { get; set; } = "";
     public bool StartWithWindows { get; set; } = true;
+    /// <summary>Adds "New shelf" to the desktop's own right-click menu while Shelves runs.</summary>
+    public bool DesktopMenu { get; set; }
     public bool DoubleClickHides { get; set; } = true;
     /// <summary>How solid a shelf's colour is over the blurred wallpaper, 0 (clear glass) to 100 (solid).</summary>
     public int Opacity { get; set; } = 50;

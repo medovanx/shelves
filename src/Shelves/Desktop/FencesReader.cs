@@ -21,8 +21,25 @@ static class FencesReader
         using var g = Registry.CurrentUser.OpenSubKey(Key + @"\Groups");
         using var i = Registry.CurrentUser.OpenSubKey(Key + @"\Icons");
         if (g == null || i == null) return [];
-        var groups = g.GetValueNames().Where(n => n.Length > 0).Select(n => g.GetValue(n) as string ?? "");
-        var icons = i.GetValueNames().Where(n => n.Length > 0).Select(n => new KeyValuePair<string, string>(n, i.GetValue(n) as string ?? ""));
+        var groups = g.GetValueNames().Where(n => n.Length > 0).Select(n => g.GetValue(n) as string ?? "").ToList();
+        var icons = i.GetValueNames().Where(n => n.Length > 0).Select(n => new KeyValuePair<string, string>(n, i.GetValue(n) as string ?? "")).ToList();
+        return Build(groups, icons, size);
+    }
+
+    /// <summary>A Fences backup file (snapshot XML or .reg export) as shelves; empty if it is not one.</summary>
+    public static List<ShelfModel> ReadFile(string path, IconSize size)
+    {
+        string text;
+        try { text = File.ReadAllText(path); } // detects UTF-16 (regedit) and UTF-8 from the byte order mark
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error(ex); return []; }
+        return FencesImport.ReadBackup(text) is { } d ? Build(d.groups, d.icons, size) : [];
+    }
+
+    /// <summary>Where Fences keeps its daily backups, if it is there.</summary>
+    public static string BackupFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Stardock", "Fences", "Backups");
+
+    static List<ShelfModel> Build(List<string> groups, List<KeyValuePair<string, string>> icons, IconSize size)
+    {
         var res = new List<ShelfModel>();
         var placed = new List<(ImportedFence f, Screen scr, Box b)>();
         foreach (var f in FencesImport.Parse(groups, icons))

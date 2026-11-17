@@ -41,8 +41,21 @@ static class Program
         if (args.Length > 1 && args[0] == "--fences-dump")
         {
             // Writes what an import from Fences would add, for checking.
-            var lines = FencesReader.Read(IconSize.Medium).Select(m => $"{m.Title}	{m.Edge}	{m.Rel}	{m.Items.Count}");
+            var lines = (args.Length > 2 ? FencesReader.ReadFile(args[2], IconSize.Medium) : FencesReader.Read(IconSize.Medium)).Select(m => $"{m.Title}	{m.Edge}	{m.Rel}	{m.Items.Count}");
             File.WriteAllLines(args[1], lines);
+            return 0;
+        }
+        if (args.Contains("--install-menu") || args.Contains("--remove-menu"))
+        {
+            // The elevated step for the desktop menu entry (started by Settings with an admin prompt).
+            return DesktopMenu.Write(args.Contains("--install-menu")) ? 0 : 1;
+        }
+        if (args.Contains("--new-shelf") && Mutex.TryOpenExisting(@"Local\Shelves.SingleInstance", out var running))
+        {
+            // From the desktop's right-click menu while Shelves runs: ask it for a new shelf where the menu was.
+            running.Dispose();
+            Native.AllowSetForegroundWindow(-1);
+            Native.PostMessage((IntPtr)0xFFFF, Native.RegisterWindowMessage(ShelvesApp.NewShelfMessage), IntPtr.Zero, IntPtr.Zero);
             return 0;
         }
         if (args.Contains("--import-fences"))
@@ -86,6 +99,8 @@ static class Program
         try
         {
             app = new ShelvesApp(args.Contains("--updated"));
+            // Started from the desktop menu while it was not running: make the shelf once it is up.
+            if (args.Contains("--new-shelf")) app.NewShelfAtMenu();
             Application.Run(app);
         }
         catch (Exception ex)

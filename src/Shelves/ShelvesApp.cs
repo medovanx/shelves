@@ -8,7 +8,7 @@ namespace Shelves;
 /// </summary>
 sealed class ShelvesApp : ApplicationContext
 {
-    public const string ShowMessage = "Shelves.Show", ExitMessage = "Shelves.Exit", ImportMessage = "Shelves.ImportFences";
+    public const string ShowMessage = "Shelves.Show", ExitMessage = "Shelves.Exit", ImportMessage = "Shelves.ImportFences", NewShelfMessage = "Shelves.NewShelf";
     /// <summary>Where layout, settings and snapshots live. SHELVES_DATA points a test run somewhere else.</summary>
     public static readonly string Dir = Environment.GetEnvironmentVariable("SHELVES_DATA") is { Length: > 0 } d
         ? d : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Shelves");
@@ -72,6 +72,7 @@ sealed class ShelvesApp : ApplicationContext
         input.ListView = () => View.ListView;
         input.AnyShelved = () => Layout.Shelves.Any(s => s.AllItems.Any());
         input.DesktopRelease += CheckBurst;
+        input.DesktopRightClick += p => lastDesktopMenuAt = p;
 
         // Show desktop (Win+D) and clicks on the desktop raise it over everything: lift the shelves with it.
         winEvent = (_, _, hwnd, _, _, _, _) =>
@@ -312,6 +313,18 @@ sealed class ShelvesApp : ApplicationContext
         m.Show(at);
     }
 
+    Point? lastDesktopMenuAt;
+
+    /// <summary>"New shelf" from the desktop's right-click menu: a shelf where the menu was opened.</summary>
+    public void NewShelfAtMenu()
+    {
+        var at = lastDesktopMenuAt ?? Cursor.Position;
+        lastDesktopMenuAt = null;
+        var scr = Screen.FromPoint(at);
+        float s = GetScale(scr);
+        NewShelf(new Rectangle(at.X, at.Y, (int)(320 * s), (int)(240 * s)));
+    }
+
     /// <summary>A new, empty shelf over a screen rectangle; its title is ready to type.</summary>
     public ShelfWindow NewShelf(Rectangle r)
     {
@@ -429,9 +442,30 @@ sealed class ShelvesApp : ApplicationContext
     }
 
     /// <summary>Adds Stardock Fences' fences as shelves (a snapshot is taken first, so it can be undone).</summary>
-    public void ImportFences()
+    public void ImportFences() => AddImported(FencesReader.Read(Settings.DefaultIconSize));
+
+    /// <summary>Asks for one of Fences' backup files (its daily snapshots, or a .reg export) and imports it.</summary>
+    public void ImportFencesBackup()
     {
-        var shelves = FencesReader.Read(Settings.DefaultIconSize);
+        using var dlg = new OpenFileDialog
+        {
+            Title = L.T("ImportFencesFile").TrimEnd('…'),
+            Filter = L.T("FencesBackupFilter") + " (*.xml;*.reg)|*.xml;*.reg",
+            InitialDirectory = Directory.Exists(FencesReader.BackupFolder) ? FencesReader.BackupFolder : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dlg.ShowDialog() != DialogResult.OK) return;
+        var shelves = FencesReader.ReadFile(dlg.FileName, Settings.DefaultIconSize);
+        if (shelves.Count == 0)
+        {
+            MessageBox.Show(L.T("NotFencesBackup"), L.T("AppName"), MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1,
+                L.Ar ? MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign : 0);
+            return;
+        }
+        AddImported(shelves);
+    }
+
+    void AddImported(List<ShelfModel> shelves)
+    {
         if (shelves.Count == 0) return;
         Snapshots.Save(Layout, L.T("AutoSnapshot"), auto: true, DateTime.Now);
         foreach (var m in shelves)
@@ -481,7 +515,7 @@ sealed class ShelvesApp : ApplicationContext
             it.Click += (_, _) => click();
             return it;
         }
-        var header = new ToolStripMenuItem(L.T("AppName") + "  " + L.F("Version", Updater.CurrentText))
+        var header = new ToolStripMenuItem($"{L.T("AppName")} v{Updater.CurrentText}")
         {
             Enabled = false,
             Image = AppIcon().ToBitmap(),
@@ -504,6 +538,7 @@ sealed class ShelvesApp : ApplicationContext
         m.Items.Add(snaps);
         m.Items.Add(Item(L.T("RestoreDesktop"), Art.IconRestore, RestoreDesktop));
         if (FencesReader.Available()) m.Items.Add(Item(L.T("ImportFences"), Art.IconAdd, ImportFences));
+        m.Items.Add(Item(L.T("ImportFencesFile"), Art.IconOpen, ImportFencesBackup));
         m.Items.Add(new ToolStripSeparator());
         var startup = new ToolStripMenuItem(L.T("StartWithWindows")) { Checked = Settings.StartWithWindows };
         startup.Click += (_, _) =>
@@ -619,6 +654,7 @@ sealed class ShelvesApp : ApplicationContext
         readonly uint show = Native.RegisterWindowMessage(ShowMessage);
         readonly uint exit = Native.RegisterWindowMessage(ExitMessage);
         readonly uint import = Native.RegisterWindowMessage(ImportMessage);
+        readonly uint newShelf = Native.RegisterWindowMessage(NewShelfMessage);
         public Control Invoker { get; } = new();
 
         public MessageWindow(ShelvesApp app)
@@ -635,9 +671,72 @@ sealed class ShelvesApp : ApplicationContext
             else if (m.Msg == (int)show) app.OpenSettings();
             else if (m.Msg == (int)exit) app.ExitThread();
             else if (m.Msg == (int)import) app.ImportFences();
+            else if (m.Msg == (int)newShelf) app.NewShelfAtMenu();
             base.WndProc(ref m);
         }
     }
+}
+
+/// <summary>
+/// "New shelf" in the desktop's own right-click menu: a shell verb on the desktop background that runs Shelves
+/// with --new-shelf (which also starts Shelves if it is not running). Nothing is loaded into Explorer.
+/// It is written machine-wide, because some Windows 11 builds (26300 at least) leave per-user entries out of
+/// the menu, as Artiseal found. That needs admin rights, so Shelves relaunches itself elevated for that one step.
+/// </summary>
+static class DesktopMenu
+{
+    const string Key = @"Software\Classes\DesktopBackground\Shell\Shelves.NewShelf";
+
+    static string Exe => Environment.ProcessPath ?? "";
+
+    /// <summary>True when the entry is there and runs this copy of Shelves.</summary>
+    public static bool Installed()
+    {
+        using var k = Registry.LocalMachine.OpenSubKey(Key + @"\command");
+        return k?.GetValue(null) is string cmd && cmd.Contains(Exe, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Adds or removes the entry, asking Windows for admin rights when needed. False if refused or failed.</summary>
+    public static bool Set(bool on)
+    {
+        if (IsAdmin()) return Write(on);
+        try
+        {
+            using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Exe, on ? "--install-menu" : "--remove-menu")
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+            p?.WaitForExit();
+            return p?.ExitCode == 0;
+        }
+        catch (System.ComponentModel.Win32Exception) { return false; } // the admin prompt was refused
+    }
+
+    /// <summary>Writes or removes the entry (needs admin rights). Also drops the per-user entry older versions wrote.</summary>
+    public static bool Write(bool on)
+    {
+        try
+        {
+            Registry.CurrentUser.DeleteSubKeyTree(Key, throwOnMissingSubKey: false);
+            if (!on) { Registry.LocalMachine.DeleteSubKeyTree(Key, throwOnMissingSubKey: false); return true; }
+            using var k = Registry.LocalMachine.CreateSubKey(Key);
+            k.SetValue("MUIVerb", L.T("NewShelf"));
+            k.SetValue("Icon", $"\"{Exe}\",0");
+            k.SetValue("Position", "Middle");
+            using var c = k.CreateSubKey("command");
+            c.SetValue(null, $"\"{Exe}\" --new-shelf");
+            return true;
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            Log.Error(ex);
+            return false;
+        }
+    }
+
+    static bool IsAdmin() => new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent())
+        .IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
 }
 
 /// <summary>The Run key entry that starts Shelves with Windows.</summary>
