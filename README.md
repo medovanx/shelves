@@ -26,7 +26,8 @@ Roll a shelf up to its title, dock it to the top, bottom, left or right edge, an
 ## Features
 
 - **Your real desktop icons.** Files stay on the Desktop. A shelf shows them with Windows' own icons and thumbnails and hides Explorer's copy. Double-click opens, right-click shows the real Explorer menu (Open with, Send to, Properties...), F2 renames, Delete sends to the Recycle Bin, and you can drag icons in, out and between shelves.
-- **Draw a shelf.** Right-drag a box on the empty desktop and pick **Create shelf here**. A plain right-click still opens Explorer's own menu.
+- **Draw a shelf.** Right-drag a box on the empty desktop and pick **Create shelf here**, or pick **New shelf** in the desktop's own right-click menu (turn it on in Settings; Windows asks for admin rights once).
+- **Pin open.** Pin a shelf so it never rolls up.
 - **Roll up.** Double-click a shelf's title to roll it up to just its title bar, and hover over it to peek inside. It rolls back up when the mouse leaves.
 - **Every edge.** Drag a shelf against the top, bottom, left or right edge and it docks there. A shelf on the left or right edge rolls into a thin vertical tab with its title turned sideways, and slides open across the screen. Shelves on the same edge sit side by side.
 - **Tabs.** Give a shelf several tabs, each with its own icons or folder. Click a tab or scroll over the strip to switch, and drag icons onto a tab to put them there.
@@ -37,7 +38,7 @@ Roll a shelf up to its title, dock it to the top, bottom, left or right edge, an
 - **Multi-monitor.** Each shelf remembers its monitor and its place as a share of the screen, so it survives resolution, scaling and taskbar changes. If its monitor is unplugged, it moves to the main one and goes back when the monitor returns.
 - **Snapshots.** The layout is saved every day and before each update, and you can save and restore your own snapshots from the tray.
 - **Safe.** Shelves never moves or deletes a file on its own. Deleting a shelf puts its icons back on the desktop, and on exit every icon returns to the exact spot it came from.
-- **Moving from Fences.** **Import from Fences** in the tray menu turns Stardock Fences' fences into shelves, with the same names, places and icons.
+- **Moving from Fences.** **Import from Fences** in the tray menu turns Stardock Fences' fences into shelves, with the same names, places and icons. Already uninstalled Fences? **Import from a Fences backup...** reads its daily snapshots or a .reg export of its settings.
 - **English and Arabic.** Full right-to-left layout in Arabic.
 - **Auto-updates.** Checks GitHub Releases, verifies the download's SHA-256 and updates itself in place.
 
@@ -72,6 +73,7 @@ Close Stardock Fences or any other desktop-icon organizer first. Both would move
 | Add icons | Drag them from the desktop onto a shelf |
 | Take icons out | Drag them from the shelf onto the desktop |
 | Roll up or open | Double-click the title |
+| Keep a shelf open | **Pin open** in its menu |
 | Peek inside a rolled-up shelf | Hover over it |
 | Dock to an edge | Drag the shelf against the edge, or use **Dock** in its menu |
 | Move or resize | Drag the title or any edge |
@@ -88,7 +90,7 @@ Close Stardock Fences or any other desktop-icon organizer first. Both would move
 
 | Page | Options |
 |---|---|
-| General | Language, start with Windows, double-click to hide |
+| General | Language, start with Windows, "New shelf" in the desktop menu, double-click to hide |
 | Appearance | Colour, opacity, corner radius, title alignment, label lines, icon size for new shelves |
 | Roll up | Animate rolling up, hover to open, open delay, roll-up delay |
 | Snapshots | Save, restore and delete snapshots |
