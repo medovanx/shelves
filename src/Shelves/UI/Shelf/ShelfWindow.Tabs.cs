@@ -3,6 +3,10 @@ namespace Shelves.UI.Shelf;
 sealed partial class ShelfWindow
 {
     int hoverTab = -1;        // tab under the mouse, or -2 for the "+" button
+    /// <summary>Where each tab is drawn now (open coordinates); tabs slide from here to their slot.</summary>
+    readonly Dictionary<ShelfTab, float> tabX = [];
+    readonly System.Windows.Forms.Timer tabTimer = new() { Interval = 10 };
+    float dragGrab, dragX;     // where the dragged tab was grabbed, and where its left edge is now
     int dragTab = -1;         // tab a drag is resting on
     DateTime dragTabSince;
 
@@ -61,9 +65,14 @@ sealed partial class ShelfWindow
         var (tabs, add) = TabRects();
         using var f = TabFont();
         float s = S;
-        for (int i = 0; i < tabs.Count; i++)
+        // The dragged tab is drawn last, on top of the ones sliding under it.
+        var order = Enumerable.Range(0, tabs.Count).OrderBy(i => i == draggedTab && drag == DragKind.TabMove ? 1 : 0).ToList();
+        foreach (int i in order)
         {
             var r = tabs[i];
+            var tab = Model.Tabs[i];
+            float x = i == draggedTab && drag == DragKind.TabMove ? dragX : tabX.TryGetValue(tab, out var ax) ? ax : r.X;
+            r.X = (int)Math.Round(x);
             r.Offset(shift);
             bool active = i == Model.Active, over = i == hoverTab || i == dragTab || i == draggedTab;
             if (active || over)
@@ -165,7 +174,94 @@ sealed partial class ShelfWindow
         m.Show(screen);
     }
 
-    void MoveTab(int i, int by) { MoveTabTo(i, i + by); app.SaveSoon(); }
+    void MoveTab(int i, int by) { MoveTabTo(i, i + by); app.SaveSoon(); StartTabSlide(); }
+
+    /// <summary>Grabs tab <paramref name="i"/> at a window point, for dragging along the strip.</summary>
+    void GrabTab(int i, Point window)
+    {
+        var (tabs, _) = TabRects();
+        if (i < 0 || i >= tabs.Count) return;
+        var p = ToOpen(window);
+        dragGrab = p.X - tabs[i].X;
+        dragX = tabs[i].X;
+        foreach (var (t, k) in Model.Tabs.Select((t, k) => (t, k))) tabX[t] = tabs[k].X;
+    }
+
+    /// <summary>
+    /// The dragged tab follows the mouse along the strip; once its middle passes another tab's middle it takes
+    /// that place, and the others slide over to make room, as tabs do in a browser.
+    /// </summary>
+    void DragTabTo(Point window)
+    {
+        if (draggedTab < 0 || draggedTab >= Model.Tabs.Count) return;
+        var (tabs, add) = TabRects();
+        var strip = TabStrip;
+        int w = tabs[draggedTab].Width;
+        var p = ToOpen(window);
+        // Within the tabs' own row: never over the "+" button.
+        int lo = tabs.Min(r => r.Left), hi = tabs.Max(r => r.Right) - w;
+        dragX = Math.Clamp(p.X - dragGrab, lo, Math.Max(lo, hi));
+        hoverTab = -1;
+        // A neighbour gives way once the dragged tab's leading edge passes its middle: its right edge for tabs after
+        // it, its left edge for tabs before it (mirrored right to left). So the last place is reachable even when
+        // the tabs are the same width.
+        float left = dragX, right = dragX + w;
+        int index = 0;
+        for (int i = 0; i < tabs.Count; i++)
+        {
+            if (i == draggedTab) continue;
+            float c = tabs[i].X + tabs[i].Width / 2f;
+            bool after = i > draggedTab;
+            bool passed = L.Ar ? (after ? left < c : right > c) : (after ? right > c : left < c);
+            // Tabs before it stay before unless passed back over; tabs after it come before once passed.
+            if (after ? passed : !passed) index++;
+        }
+        if (index != draggedTab)
+        {
+            MoveTabTo(draggedTab, index);
+            draggedTab = index;
+        }
+        StartTabSlide();
+        Apply();
+    }
+
+    /// <summary>The dragged tab was let go: it slides into its slot from where it was dropped.</summary>
+    void DropTab()
+    {
+        if (draggedTab >= 0 && draggedTab < Model.Tabs.Count) tabX[Model.Tabs[draggedTab]] = dragX;
+        draggedTab = -1;
+        hoverTab = -1;
+        app.SaveSoon();
+        StartTabSlide();
+    }
+
+    void StartTabSlide()
+    {
+        if (tabTimer.Enabled) return;
+        tabTimer.Tick -= TabSlideTick;
+        tabTimer.Tick += TabSlideTick;
+        tabTimer.Start();
+    }
+
+    /// <summary>Eases every tab (but the dragged one) toward its slot; stops once all are there.</summary>
+    void TabSlideTick(object? sender, EventArgs e)
+    {
+        var (tabs, _) = TabRects();
+        bool moving = false;
+        for (int i = 0; i < tabs.Count; i++)
+        {
+            var t = Model.Tabs[i];
+            if (i == draggedTab && drag == DragKind.TabMove) continue;
+            float x = tabX.TryGetValue(t, out var v) ? v : tabs[i].X;
+            float target = tabs[i].X;
+            float next = Math.Abs(target - x) < 0.6f ? target : x + (target - x) * 0.3f;
+            tabX[t] = next;
+            moving |= next != target;
+        }
+        foreach (var gone in tabX.Keys.Where(k => !Model.Tabs.Contains(k)).ToList()) tabX.Remove(gone);
+        Apply();
+        if (!moving && !(drag == DragKind.TabMove)) tabTimer.Stop();
+    }
 
     /// <summary>Moves tab <paramref name="from"/> to position <paramref name="to"/>, keeping the same tab shown.</summary>
     void MoveTabTo(int from, int to)

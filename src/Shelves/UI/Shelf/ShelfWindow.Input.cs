@@ -88,6 +88,7 @@ sealed partial class ShelfWindow
             // Shown at once; dragging it sideways moves it along the strip.
             SelectTab(tab);
             draggedTab = tab;
+            GrabTab(tab, e.Location);
             drag = DragKind.TabPending;
             Capture = true;
             return;
@@ -141,11 +142,8 @@ sealed partial class ShelfWindow
                 drag = DragKind.TabMove;
                 goto case DragKind.TabMove;
             case DragKind.TabMove:
-            {
-                int over = TabAtStrip(e.Location);
-                if (over >= 0 && over != draggedTab) { MoveTabTo(draggedTab, over); draggedTab = over; }
+                DragTabTo(e.Location);
                 return;
-            }
             case DragKind.TitlePending when moved:
                 drag = DragKind.Move;
                 goto case DragKind.Move;
@@ -214,9 +212,7 @@ sealed partial class ShelfWindow
                 Apply();
                 break;
             case DragKind.TabMove:
-                draggedTab = -1;
-                app.SaveSoon();
-                Apply();
+                DropTab();
                 break;
             case DragKind.TabPending:
                 draggedTab = -1;

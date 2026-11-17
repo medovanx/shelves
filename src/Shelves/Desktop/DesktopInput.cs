@@ -36,7 +36,7 @@ sealed class DesktopInput : IDisposable
     Point pressedAt;
     /// <summary>Set by the app: true when a point is on Explorer's desktop at all (icon or not).</summary>
     public Func<Point, bool> IsDesktop { get; set; } = _ => false;
-    bool pressedOnDesktop;
+    bool pressedOnDesktop, pressedOnIcon;
     public Func<Theme> Theme { get; set; } = () => Shelves.UI.Styling.Theme.Current;
 
     public DesktopInput(Control invoker, Func<Point, bool> emptyDesktop, bool hook = true)
@@ -104,7 +104,7 @@ sealed class DesktopInput : IDisposable
                         // A drop is about to make Explorer pull hidden icons back on screen. Lock the list view's
                         // drawing first, so they never show. WM_SETREDRAW does not hold: Explorer turns drawing back on
                         // while it handles the drop. LockWindowUpdate takes effect at once and only we lift it.
-                        bool frozen = dragged && AnyShelved() && ListView() is var lv && lv != IntPtr.Zero
+                        bool frozen = dragged && pressedOnIcon && AnyShelved() && ListView() is var lv && lv != IntPtr.Zero
                                       && Native.LockWindowUpdate(lv);
                         invoker.BeginInvoke(() => DesktopRelease?.Invoke(frozen));
                     }
@@ -112,6 +112,8 @@ sealed class DesktopInput : IDisposable
                 case 0x201: // WM_LBUTTONDOWN
                 {
                     pressedOnDesktop = IsDesktop(pt);
+                    // An icon, not empty desktop: only dragging an icon ends in a drop that moves hidden icons.
+                    pressedOnIcon = pressedOnDesktop && !emptyDesktop(pt);
                     pressedAt = pt;
                     long now = Environment.TickCount64;
                     bool empty = emptyDesktop(pt);

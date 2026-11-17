@@ -159,8 +159,8 @@ sealed class ShelvesApp : ApplicationContext
         t.Tick += (_, _) =>
         {
             bool fixedNow = Keeper.Check();
-            // Drawing comes back once the hidden icons are parked again, and in any case within 400 ms.
-            if (frozen && (fixedNow || sw.ElapsedMilliseconds > 400)) { Thaw(lv); frozen = false; }
+            // Drawing comes back as soon as the hidden icons are parked again, and in any case within 200 ms.
+            if (frozen && (fixedNow || sw.ElapsedMilliseconds > 200)) { Thaw(lv); frozen = false; }
             if (sw.ElapsedMilliseconds > 700) { t.Stop(); t.Dispose(); if (frozen) Thaw(lv); }
         };
         t.Start();

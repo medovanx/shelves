@@ -78,7 +78,7 @@ sealed partial class ShelfWindow : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { anim.Dispose(); hover.Dispose(); openFrame?.Dispose(); watcher?.Dispose(); portalTimer.Dispose(); }
+        if (disposing) { tabTimer.Dispose(); anim.Dispose(); hover.Dispose(); openFrame?.Dispose(); watcher?.Dispose(); portalTimer.Dispose(); }
         base.Dispose(disposing);
     }
 
