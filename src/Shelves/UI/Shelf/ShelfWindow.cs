@@ -56,9 +56,24 @@ sealed partial class ShelfWindow : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
+        NoWindowsFrame(Handle);
         Render();
         PlaceAboveDesktop();
         hover.Start();
+    }
+
+    /// <summary>
+    /// Windows 11 gives top-level windows its own shadow, rounded corners and accent border, drawn outside what the
+    /// shelf paints. A shelf draws its own edge, so all three are turned off.
+    /// </summary>
+    static void NoWindowsFrame(IntPtr hwnd)
+    {
+        int disabled = 1; // DWMNCRP_DISABLED: no non-client rendering, so no shadow
+        Native.DwmSetWindowAttribute(hwnd, 2 /* DWMWA_NCRENDERING_POLICY */, ref disabled, sizeof(int));
+        int square = 1; // DWMWCP_DONOTROUND
+        Native.DwmSetWindowAttribute(hwnd, 33 /* DWMWA_WINDOW_CORNER_PREFERENCE */, ref square, sizeof(int));
+        int none = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE
+        Native.DwmSetWindowAttribute(hwnd, 34 /* DWMWA_BORDER_COLOR */, ref none, sizeof(int));
     }
 
     protected override void Dispose(bool disposing)
