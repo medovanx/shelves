@@ -107,10 +107,12 @@ sealed partial class ShelfWindow
     /// <summary>The 1 px border, left off the side that touches the screen edge.</summary>
     void DrawBorder(Graphics g, Box box)
     {
-        using var border = new Pen(Color.FromArgb(Th.Dark ? 48 : 40, Th.Dark ? Color.White : Color.Black), 1);
+        using var border = new Pen(Color.FromArgb(Th.Dark ? 30 : 28, Th.Dark ? Color.White : Color.Black), 1);
         using var path = ShapePath(box, 0.5f);
         var state = g.Save();
-        g.PixelOffsetMode = PixelOffsetMode.None;
+        // Pixel centres at half coordinates: a 1 px pen on a path inset by half a pixel covers exactly one pixel
+        // row, instead of smearing over two (which read as a soft rim, like a shadow).
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         var keep = Model.Edge switch
         {
             Edge.Top => new Rectangle(0, 1, box.W, box.H),
