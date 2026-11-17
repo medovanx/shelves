@@ -3,10 +3,10 @@
 All notable changes to Shelves are listed here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.0] - 2026-11-17
 
 ### Added
-- Tabs inside a shelf, each with its own icons or folder.
+- Tabs inside a shelf, each with its own icons or folder. Drag a tab to move it; the others slide aside.
 - Colour and opacity for all shelves, and per shelf from its menu.
 - Icon labels get the desktop's shadow when Windows' "drop shadows for icon labels" is on.
 - "Animate rolling up", on whatever Windows' animation setting is.
@@ -39,4 +39,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Import from Stardock Fences.
 - Settings in English and Arabic, start with Windows, and automatic updates from GitHub Releases.
 
+[0.2.0]: https://github.com/medovanx/shelves/releases/tag/v0.2.0
 [0.1.0]: https://github.com/medovanx/shelves/releases/tag/v0.1.0
