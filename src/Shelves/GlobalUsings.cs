@@ -1,0 +1,11 @@
+global using Shelves.Core.Geometry;
+global using Shelves.Core.Model;
+global using Shelves.Interop;
+global using Shelves.Services;
+global using Shelves.UI.Controls;
+global using Shelves.UI.Styling;
+global using Shelves.Desktop;
+global using Shelves.DevTools;
+global using Shelves.Localization;
+global using Shelves.UI;
+global using Shelves.UI.Shelf;

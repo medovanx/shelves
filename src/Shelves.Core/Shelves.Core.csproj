@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Layout maths and the saved model, with no Windows or UI dependencies, so it can be unit tested anywhere. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Shelves.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,129 @@
+using Shelves.Core.Model;
+
+namespace Shelves.Core.Tests;
+
+public class ModelTests
+{
+    [Fact]
+    public void Shelve_moves_an_item_between_shelves()
+    {
+        var l = new Layout();
+        var a = new ShelfModel { Title = "A" };
+        var b = new ShelfModel { Title = "B" };
+        l.Shelves.AddRange([a, b]);
+        l.Shelve(@"C:\D\x.txt", a);
+        l.Shelve(@"C:\D\y.txt", a);
+        l.Shelve(@"c:\d\X.TXT", b, 0); // same file, other case
+        Assert.Equal([@"C:\D\y.txt"], a.Items);
+        Assert.Equal([@"c:\d\X.TXT"], b.Items);
+        Assert.Same(b, l.ShelfOf(@"C:\D\x.txt"));
+    }
+
+    [Fact]
+    public void Rename_follows_the_file_and_its_home()
+    {
+        var l = new Layout();
+        var a = new ShelfModel();
+        l.Shelves.Add(a);
+        l.Shelve("old", a);
+        l.Home["old"] = new Pt(5, 6);
+        Assert.True(l.Rename("old", "new"));
+        Assert.Equal(["new"], a.Items);
+        Assert.Equal(new Pt(5, 6), l.Home["new"]);
+        Assert.False(l.Home.ContainsKey("old"));
+    }
+
+    [Fact]
+    public void Portals_do_not_own_desktop_items()
+    {
+        var l = new Layout();
+        l.Shelves.Add(new ShelfModel { Portal = @"C:\Downloads", Items = ["x"] });
+        Assert.Null(l.ShelfOf("x"));
+        Assert.Empty(l.AllShelved());
+    }
+
+    [Fact]
+    public void Layout_round_trips_through_json()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var path = Path.Combine(dir, "layout.json");
+            var l = new Layout();
+            l.Shelves.Add(new ShelfModel { Title = "Games", Monitor = @"\\.\DISPLAY1", Rel = new(0.1, 0.2, 0.3, 0.4), Edge = Geometry.Edge.Right, Rolled = true, Items = ["a", "b"] });
+            l.Home["a"] = new Pt(10, 20);
+            LayoutStore.Save(path, l);
+            var back = LayoutStore.Load(path);
+            var s = Assert.Single(back.Shelves);
+            Assert.Equal("Games", s.Title);
+            Assert.Equal(Geometry.Edge.Right, s.Edge);
+            Assert.True(s.Rolled);
+            Assert.Equal(new Geometry.RelBox(0.1, 0.2, 0.3, 0.4), s.Rel);
+            Assert.Equal(["a", "b"], s.Items);
+            Assert.Equal(new Pt(10, 20), back.Home["A"]); // case-insensitive after loading
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Broken_files_load_as_empty()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var path = Path.Combine(dir, "layout.json");
+            File.WriteAllText(path, "{ not json");
+            Assert.Empty(LayoutStore.Load(path).Shelves);
+            File.WriteAllText(path, """{ "Version": 0, "Shelves": null, "Home": null }""");
+            var l = LayoutStore.Load(path);
+            Assert.Empty(l.Shelves);
+            Assert.Equal(Layout.CurrentVersion, l.Version);
+            Assert.Empty(LayoutStore.Load(Path.Combine(dir, "missing.json")).Shelves);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Settings_migration_clamps_values()
+    {
+        var s = Settings.Migrate(new Settings { Opacity = 400, CornerRadius = -3, LabelLines = 9, Language = null!, Version = 0 });
+        Assert.Equal(100, s.Opacity);
+        Assert.Equal(0, s.CornerRadius);
+        Assert.Equal(3, s.LabelLines);
+        Assert.Equal("", s.Language);
+        Assert.Equal(Settings.CurrentVersion, s.Version);
+    }
+
+    [Fact]
+    public void Snapshots_rotate_only_automatic_ones()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var store = new SnapshotStore(dir);
+            var t = new DateTime(2026, 11, 1, 9, 0, 0);
+            store.Save(new Layout(), "Mine", auto: false, t);
+            for (int i = 0; i < 14; i++) store.Save(new Layout(), "Daily", auto: true, t.AddDays(i + 1));
+            var all = store.List();
+            Assert.Equal(SnapshotStore.KeepAuto, all.Count(x => x.Snap.Auto));
+            Assert.Contains(all, x => x.Snap.Name == "Mine");
+            Assert.Equal(t.AddDays(14), all[0].Snap.Time); // newest first
+            Assert.False(store.NeedsDaily(t.AddDays(14)));
+            Assert.True(store.NeedsDaily(t.AddDays(15)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Scrambled_when_most_shelved_items_are_gone()
+    {
+        var l = new Layout();
+        l.Shelves.Add(new ShelfModel { Items = ["a", "b", "c", "d"] });
+        Assert.False(Health.LooksScrambled(l, new HashSet<string> { "a", "b", "c", "d" }));
+        Assert.False(Health.LooksScrambled(l, new HashSet<string> { "a", "b" })); // half: not more than half
+        Assert.True(Health.LooksScrambled(l, new HashSet<string> { "a" }));
+        var small = new Layout();
+        small.Shelves.Add(new ShelfModel { Items = ["a", "b"] });
+        Assert.False(Health.LooksScrambled(small, new HashSet<string>())); // fewer than 3
+    }
+}

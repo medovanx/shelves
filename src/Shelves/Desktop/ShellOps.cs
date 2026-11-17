@@ -1,0 +1,276 @@
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+using ComDataObject = System.Runtime.InteropServices.ComTypes.IDataObject;
+
+namespace Shelves.Desktop;
+
+/// <summary>A set of shell items that share one parent folder, as the shell's own menus and drags need them.</summary>
+sealed class ItemGroup : IDisposable
+{
+    public IShellFolder Folder { get; }
+    public IntPtr[] Pidls { get; }
+    readonly IntPtr[] owned;
+    readonly bool releaseFolder;
+
+    ItemGroup(IShellFolder folder, IntPtr[] pidls, IntPtr[] owned, bool releaseFolder)
+    {
+        Folder = folder; Pidls = pidls; this.owned = owned; this.releaseFolder = releaseFolder;
+    }
+
+    /// <summary>Desktop items: children of the merged desktop folder, so user and public desktop items mix.</summary>
+    public static ItemGroup? FromDesktop(DesktopView view, IEnumerable<string> names)
+    {
+        if (view.Folder == null) return null;
+        var p = view.Pidls(names);
+        return p.Length == 0 ? null : new ItemGroup(view.Folder, p, p, false);
+    }
+
+    /// <summary>Files in one folder (a portal), by full path.</summary>
+    public static ItemGroup? FromPaths(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return null;
+        var abs = new List<IntPtr>();
+        IShellFolder? parent = null;
+        var children = new List<IntPtr>();
+        foreach (var path in paths)
+        {
+            if (Shell32.SHParseDisplayName(path, IntPtr.Zero, out var pidl, 0, out _) != 0) continue;
+            abs.Add(pidl);
+            Guid iid = Shell32.IID_IShellFolder;
+            if (Shell32.SHBindToParent(pidl, ref iid, out var f, out var child) != 0) continue;
+            parent ??= (IShellFolder)f;
+            children.Add(child); // points inside pidl, freed with it
+        }
+        if (parent == null || children.Count == 0) { foreach (var a in abs) Shell32.CoTaskMemFree(a); return null; }
+        return new ItemGroup(parent, [.. children], [.. abs], true);
+    }
+
+    public void Dispose()
+    {
+        foreach (var p in owned) Shell32.CoTaskMemFree(p);
+        if (releaseFolder) try { Marshal.ReleaseComObject(Folder); } catch { }
+    }
+}
+
+/// <summary>Opening, menus, drags and icons for shell items, all through the shell's own objects.</summary>
+static class ShellOps
+{
+    /// <summary>Opens items the way a double-click on the desktop does (the default verb).</summary>
+    public static void Open(IntPtr hwnd, string parsingName)
+    {
+        if (Shell32.SHParseDisplayName(parsingName, IntPtr.Zero, out var pidl, 0, out _) != 0) return;
+        try
+        {
+            var info = new Shell32.SHELLEXECUTEINFO
+            {
+                cbSize = Marshal.SizeOf<Shell32.SHELLEXECUTEINFO>(),
+                fMask = 0x4 /* SEE_MASK_IDLIST */ | 0x400 /* SEE_MASK_FLAG_NO_UI off? keep errors */ & 0x4,
+                hwnd = hwnd,
+                lpIDList = pidl,
+                nShow = 1,
+            };
+            Shell32.ShellExecuteEx(ref info);
+        }
+        finally { Shell32.CoTaskMemFree(pidl); }
+    }
+
+    static IContextMenu2? menu2;
+    static IContextMenu3? menu3;
+
+    /// <summary>Forward menu messages while a shell context menu is open, so "Send to" and "Open with" fill in.</summary>
+    public static bool HandleMenuMessage(ref Message m)
+    {
+        if (m.Msg is not (0x117 /* WM_INITMENUPOPUP */ or 0x2B /* WM_DRAWITEM */ or 0x2C /* WM_MEASUREITEM */ or 0x120 /* WM_MENUCHAR */))
+            return false;
+        if (menu3 != null)
+        {
+            if (menu3.HandleMenuMsg2((uint)m.Msg, m.WParam, m.LParam, out var r) == 0) { m.Result = r; return true; }
+        }
+        else if (menu2 != null && menu2.HandleMenuMsg((uint)m.Msg, m.WParam, m.LParam) == 0)
+        {
+            m.Result = IntPtr.Zero;
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Shows the shell's context menu for the items at a screen point and runs the choice. Returns the verb when the
+    /// caller should handle it itself ("rename"), otherwise null.
+    /// </summary>
+    public static string? ContextMenu(IntPtr hwnd, ItemGroup items, Point screen, bool extended)
+    {
+        Guid iid = Shell32.IID_IContextMenu;
+        items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
+        var cm = (IContextMenu)obj;
+        menu2 = obj as IContextMenu2;
+        menu3 = obj as IContextMenu3;
+        var hmenu = Shell32.CreatePopupMenu();
+        try
+        {
+            const uint first = 1, last = 0x7FFF;
+            uint flags = 0x10 /* CMF_CANRENAME */ | (extended ? 0x100u /* CMF_EXTENDEDVERBS */ : 0);
+            if (cm.QueryContextMenu(hmenu, 0, first, last, flags) < 0) return null;
+            int cmd = Shell32.TrackPopupMenuEx(hmenu, 0x100 /* TPM_RETURNCMD */ | 0x2 /* TPM_RIGHTBUTTON */, screen.X, screen.Y, hwnd, IntPtr.Zero);
+            if (cmd <= 0) return null;
+            string? verb = Verb(cm, (uint)(cmd - first));
+            if (verb is "rename") return verb;
+            var info = new CMINVOKECOMMANDINFOEX
+            {
+                cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFOEX>(),
+                fMask = 0x4000 /* CMIC_MASK_UNICODE */ | 0x20000000 /* CMIC_MASK_PTINVOKE */,
+                hwnd = hwnd,
+                lpVerb = (IntPtr)(cmd - first),
+                lpVerbW = (IntPtr)(cmd - first),
+                nShow = 1,
+                ptInvoke = new Native.POINT { X = screen.X, Y = screen.Y },
+            };
+            cm.InvokeCommand(ref info);
+            return verb;
+        }
+        finally
+        {
+            Shell32.DestroyMenu(hmenu);
+            menu2 = null; menu3 = null;
+            Marshal.ReleaseComObject(cm);
+        }
+    }
+
+    /// <summary>Runs one verb ("delete", "properties", ...) on the items without showing a menu.</summary>
+    public static void Invoke(IntPtr hwnd, ItemGroup items, string verb)
+    {
+        Guid iid = Shell32.IID_IContextMenu;
+        items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
+        var cm = (IContextMenu)obj;
+        var hmenu = Shell32.CreatePopupMenu();
+        var ansi = Marshal.StringToHGlobalAnsi(verb);
+        var wide = Marshal.StringToHGlobalUni(verb);
+        try
+        {
+            cm.QueryContextMenu(hmenu, 0, 1, 0x7FFF, 0);
+            var info = new CMINVOKECOMMANDINFOEX
+            {
+                cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFOEX>(),
+                fMask = 0x4000,
+                hwnd = hwnd,
+                lpVerb = ansi,
+                lpVerbW = wide,
+                nShow = 1,
+            };
+            cm.InvokeCommand(ref info);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(ansi);
+            Marshal.FreeHGlobal(wide);
+            Shell32.DestroyMenu(hmenu);
+            Marshal.ReleaseComObject(cm);
+        }
+    }
+
+    static string? Verb(IContextMenu cm, uint id)
+    {
+        var buf = Marshal.AllocHGlobal(512);
+        try
+        {
+            return cm.GetCommandString((UIntPtr)id, 4 /* GCS_VERBW */, IntPtr.Zero, buf, 256) == 0 ? Marshal.PtrToStringUni(buf) : null;
+        }
+        catch { return null; }
+        finally { Marshal.FreeHGlobal(buf); }
+    }
+
+    /// <summary>Renames through the shell (it keeps extensions hidden the way Explorer does, and handles conflicts).</summary>
+    public static bool Rename(IntPtr hwnd, ItemGroup item, string newName)
+    {
+        try
+        {
+            item.Folder.SetNameOf(hwnd, item.Pidls[0], newName, 0 /* SHGDN_NORMAL */, out var np);
+            if (np != IntPtr.Zero) Shell32.CoTaskMemFree(np);
+            return true;
+        }
+        catch (COMException) { return false; }
+    }
+
+    /// <summary>Drags the items with the shell's own data object, drag image and drop source.</summary>
+    public static DragDropEffects Drag(IntPtr hwnd, ItemGroup items)
+    {
+        Guid iid = Shell32.IID_IDataObject;
+        items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
+        try
+        {
+            Shell32.SHDoDragDrop(hwnd, (ComDataObject)obj, IntPtr.Zero, 1 | 2 | 4 /* copy, move, link */, out int effect);
+            return (DragDropEffects)effect;
+        }
+        finally { Marshal.ReleaseComObject(obj); }
+    }
+
+    /// <summary>The item's name as Explorer shows it (extensions hidden or not, as the user set).</summary>
+    public static string DisplayName(string parsingName)
+    {
+        try
+        {
+            Guid iid = Shell32.IID_IShellItem;
+            Shell32.SHCreateItemFromParsingName(parsingName, IntPtr.Zero, ref iid, out var o);
+            var si = (IShellItem)o;
+            try { si.GetDisplayName(0 /* SIGDN_NORMALDISPLAY */, out var n); return n; }
+            finally { Marshal.ReleaseComObject(si); }
+        }
+        catch (Exception ex) when (ex is COMException or ArgumentException or FileNotFoundException)
+        {
+            return Path.GetFileNameWithoutExtension(parsingName);
+        }
+    }
+
+    /// <summary>The item's icon or thumbnail at <paramref name="px"/> pixels, as Explorer would draw it, or null.</summary>
+    public static Bitmap? Icon(string parsingName, int px)
+    {
+        try
+        {
+            Guid iid = Shell32.IID_IShellItemImageFactory;
+            Shell32.SHCreateItemFromParsingName(parsingName, IntPtr.Zero, ref iid, out var o);
+            var f = (IShellItemImageFactory)o;
+            try
+            {
+                // SIIGBF_BIGGERSIZEOK: a sharper bigger image is fine, it is scaled down when drawn.
+                if (f.GetImage(new Native.SIZE { CX = px, CY = px }, 0x1, out var hbmp) != 0 || hbmp == IntPtr.Zero) return null;
+                try { return FromHBitmap(hbmp); }
+                finally { Native.DeleteObject(hbmp); }
+            }
+            finally { Marshal.ReleaseComObject(f); }
+        }
+        catch (Exception ex) when (ex is COMException or ArgumentException or FileNotFoundException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Copies a 32-bit DIB section (premultiplied alpha, as the shell returns it) into a bitmap.</summary>
+    static unsafe Bitmap? FromHBitmap(IntPtr hbmp)
+    {
+        if (Shell32.GetObject(hbmp, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0 || ds.dsBm.bmBits == IntPtr.Zero || ds.dsBm.bmBitsPixel != 32)
+            return Image.FromHbitmap(hbmp);
+        int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight, stride = ds.dsBm.bmWidthBytes;
+        bool bottomUp = ds.dsBmih.biHeight > 0;
+        var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
+        var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
+        try
+        {
+            bool anyAlpha = false;
+            for (int y = 0; y < h; y++)
+            {
+                var src = (uint*)((byte*)ds.dsBm.bmBits + (bottomUp ? h - 1 - y : y) * stride);
+                var dst = (uint*)((byte*)data.Scan0 + y * data.Stride);
+                for (int x = 0; x < w; x++) { dst[x] = src[x]; anyAlpha |= (src[x] >> 24) != 0; }
+            }
+            // Some icons come with no alpha at all: treat them as opaque.
+            if (!anyAlpha)
+                for (int y = 0; y < h; y++)
+                {
+                    var dst = (uint*)((byte*)data.Scan0 + y * data.Stride);
+                    for (int x = 0; x < w; x++) dst[x] |= 0xFF000000;
+                }
+        }
+        finally { bmp.UnlockBits(data); }
+        return bmp;
+    }
+}
