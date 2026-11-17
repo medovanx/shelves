@@ -101,6 +101,8 @@ static class Program
             app = new ShelvesApp(args.Contains("--updated"));
             // Started from the desktop menu while it was not running: make the shelf once it is up.
             if (args.Contains("--new-shelf")) app.NewShelfAtMenu();
+            int fi = Array.IndexOf(args, "--import-fences-file");
+            if (fi >= 0 && fi + 1 < args.Length) app.ImportFencesFile(args[fi + 1]);
             Application.Run(app);
         }
         catch (Exception ex)

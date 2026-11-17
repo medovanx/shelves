@@ -464,6 +464,9 @@ sealed class ShelvesApp : ApplicationContext
         AddImported(shelves);
     }
 
+    /// <summary>Imports a Fences backup file without asking (--import-fences-file at start).</summary>
+    public void ImportFencesFile(string path) => AddImported(FencesReader.ReadFile(path, Settings.DefaultIconSize));
+
     void AddImported(List<ShelfModel> shelves)
     {
         if (shelves.Count == 0) return;
@@ -545,7 +548,7 @@ sealed class ShelvesApp : ApplicationContext
         {
             Settings.StartWithWindows = !Settings.StartWithWindows;
             SaveSettings();
-            Autostart.Apply(Settings.StartWithWindows);
+            Autostart.Apply(Settings.StartWithWindows, userChoice: true);
         };
         m.Items.Add(startup);
         m.Items.Add(Item(L.T("Settings"), Art.IconSettings, OpenSettings));
@@ -578,7 +581,7 @@ sealed class ShelvesApp : ApplicationContext
         SaveSettings();
         L.Apply(Settings.Language);
         tray.Text = L.T("AppName");
-        Autostart.Apply(Settings.StartWithWindows);
+        Autostart.Apply(Settings.StartWithWindows, userChoice: true);
         foreach (var w in Windows) w.Repaint();
     }
 
@@ -743,8 +746,13 @@ static class DesktopMenu
 static class Autostart
 {
     const string Key = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    const string Approved = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
 
-    public static void Apply(bool on)
+    /// <param name="userChoice">
+    /// True when the user just turned it on in Shelves: marks it enabled even if Task Manager had it disabled.
+    /// At start-up it only adds a missing mark, so a choice made in Task Manager stays.
+    /// </param>
+    public static void Apply(bool on, bool userChoice = false)
     {
 #if DEBUG
         return; // a development build never registers itself
@@ -755,6 +763,12 @@ static class Autostart
             if (k == null) return;
             if (on) k.SetValue("Shelves", $"\"{Environment.ProcessPath}\"");
             else if (k.GetValue("Shelves") != null) k.DeleteValue("Shelves");
+            // Recent Windows 11 builds skip a Run entry that has no "enabled" mark in StartupApproved (the list
+            // Task Manager's Startup apps page edits). Mark it, or it never starts.
+            using var approved = Registry.CurrentUser.CreateSubKey(Approved);
+            if (!on) approved.DeleteValue("Shelves", throwOnMissingValue: false);
+            else if (userChoice || approved.GetValue("Shelves") == null)
+                approved.SetValue("Shelves", new byte[] { 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, RegistryValueKind.Binary);
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException) { Log.Error(ex); }
     }
