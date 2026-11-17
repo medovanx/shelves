@@ -86,7 +86,16 @@ sealed class Wallpaper : IDisposable
         finally { Marshal.ReleaseComObject(dw); }
     }
 
-    static Bitmap Render(Rectangle monitor, string path, Color color, int pos)
+    /// <summary>For --compose: the monitor's wallpaper at full size, not blurred.</summary>
+    public Bitmap? Sharp(Rectangle monitor)
+    {
+        try { var (path, color, pos) = Info(monitor); return Render(monitor, path, color, pos, 1, blur: false); }
+        catch (Exception ex) when (ex is COMException or IOException or ArgumentException) { return null; }
+    }
+
+    static Bitmap Render(Rectangle monitor, string path, Color color, int pos) => Render(monitor, path, color, pos, Shrink, blur: true);
+
+    static Bitmap Render(Rectangle monitor, string path, Color color, int pos, int Shrink, bool blur)
     {
         int w = Math.Max(1, monitor.Width / Shrink), h = Math.Max(1, monitor.Height / Shrink);
         var small = new Bitmap(w, h, PixelFormat.Format32bppArgb);
@@ -127,9 +136,7 @@ sealed class Wallpaper : IDisposable
                 }
             }
         }
-        BoxBlur(small, 3);
-        BoxBlur(small, 3);
-        BoxBlur(small, 3);
+        if (blur) { BoxBlur(small, 3); BoxBlur(small, 3); BoxBlur(small, 3); }
         return small;
     }
 

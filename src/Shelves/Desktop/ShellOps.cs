@@ -244,31 +244,41 @@ static class ShellOps
         }
     }
 
-    /// <summary>Copies a 32-bit DIB section (premultiplied alpha, as the shell returns it) into a bitmap.</summary>
+    /// <summary>
+    /// Copies a 32-bit DIB section into a bitmap. The shell returns icons with straight (not premultiplied) alpha,
+    /// so soft edges keep their full colour; reading them as premultiplied made those edges hard and bright.
+    /// A bitmap whose colours never exceed their alpha may be premultiplied (some thumbnails), and is kept as is.
+    /// </summary>
     static unsafe Bitmap? FromHBitmap(IntPtr hbmp)
     {
         if (Shell32.GetObject(hbmp, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0 || ds.dsBm.bmBits == IntPtr.Zero || ds.dsBm.bmBitsPixel != 32)
             return Image.FromHbitmap(hbmp);
         int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight, stride = ds.dsBm.bmWidthBytes;
         bool bottomUp = ds.dsBmih.biHeight > 0;
-        var bmp = new Bitmap(w, h, PixelFormat.Format32bppPArgb);
-        var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, PixelFormat.Format32bppPArgb);
+        bool anyAlpha = false, straight = false;
+        for (int y = 0; y < h; y++)
+        {
+            var src = (uint*)((byte*)ds.dsBm.bmBits + y * stride);
+            for (int x = 0; x < w; x++)
+            {
+                uint p = src[x];
+                uint a = p >> 24;
+                if (a != 0) anyAlpha = true;
+                if (((p >> 16) & 255) > a || ((p >> 8) & 255) > a || (p & 255) > a) straight = true;
+            }
+        }
+        var format = straight || !anyAlpha ? PixelFormat.Format32bppArgb : PixelFormat.Format32bppPArgb;
+        var bmp = new Bitmap(w, h, format);
+        var data = bmp.LockBits(new Rectangle(0, 0, w, h), ImageLockMode.WriteOnly, format);
         try
         {
-            bool anyAlpha = false;
             for (int y = 0; y < h; y++)
             {
                 var src = (uint*)((byte*)ds.dsBm.bmBits + (bottomUp ? h - 1 - y : y) * stride);
                 var dst = (uint*)((byte*)data.Scan0 + y * data.Stride);
-                for (int x = 0; x < w; x++) { dst[x] = src[x]; anyAlpha |= (src[x] >> 24) != 0; }
+                // No alpha at all: an old icon drawn opaque.
+                for (int x = 0; x < w; x++) dst[x] = anyAlpha ? src[x] : src[x] | 0xFF000000;
             }
-            // Some icons come with no alpha at all: treat them as opaque.
-            if (!anyAlpha)
-                for (int y = 0; y < h; y++)
-                {
-                    var dst = (uint*)((byte*)data.Scan0 + y * data.Stride);
-                    for (int x = 0; x < w; x++) dst[x] |= 0xFF000000;
-                }
         }
         finally { bmp.UnlockBits(data); }
         return bmp;

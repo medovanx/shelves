@@ -40,6 +40,34 @@ static class Shots
         return 0;
     }
 
+    /// <summary>
+    /// --compose &lt;file&gt;: the real layout drawn over the real wallpaper of the main monitor, for checking how shelves
+    /// meet the desktop. Writes a local file only; never used for the README.
+    /// </summary>
+    public static int Compose(string path)
+    {
+        var mon = Screen.PrimaryScreen!.Bounds;
+        var app = new ShelvesApp(false, shot: false, compose: true) { Theme = Theme.Current };
+        var wall = app.Wallpaper.Sharp(mon);
+        using var canvas = new Bitmap(mon.Width, mon.Height, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(canvas))
+        {
+            if (wall != null) g.DrawImage(wall, 0, 0, mon.Width, mon.Height);
+            foreach (var m in app.Layout.Shelves)
+            {
+                var w = new ShelfWindow(app, m);
+                // Open, so the icons show.
+                var box = w.OpenBox;
+                if (!mon.IntersectsWith(new Rectangle(box.X, box.Y, box.W, box.H))) continue;
+                using var bmp = w.Snapshot(box, 1);
+                g.DrawImage(bmp, box.X - mon.X, box.Y - mon.Y);
+                w.Dispose();
+            }
+        }
+        canvas.Save(path, ImageFormat.Png);
+        return 0;
+    }
+
     /// <summary>A desktop with five shelves: two floating, one on each side edge, one on the bottom edge.</summary>
     static void Hero(string path, string samples, bool dark)
     {

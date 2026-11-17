@@ -43,13 +43,16 @@ sealed class ShelvesApp : ApplicationContext
     /// <summary>For --shots: draws shelves off screen, without Explorer, hooks, tray or saving.</summary>
     public bool ShotMode { get; }
 
-    public ShelvesApp(bool updated, bool shot = false)
+    public ShelvesApp(bool updated, bool shot = false, bool compose = false)
     {
+        // --compose draws the user's real layout off screen: no Explorer, hooks or tray, but the real data.
+        bool realData = !shot || compose;
+        shot |= compose;
         ShotMode = shot;
         Directory.CreateDirectory(Dir);
-        Settings = shot ? new Settings() : Settings.Load(SettingsPath);
+        Settings = realData ? Settings.Load(SettingsPath) : new Settings();
         if (!shot) { L.Apply(Settings.Language); SaveSettings(); } // writes back any upgrade from an older version
-        Layout = shot ? new Layout() : LayoutStore.Load(LayoutPath);
+        Layout = realData ? LayoutStore.Load(LayoutPath) : new Layout();
         Keeper = new IconKeeper(View, () => Layout);
         Keeper.HomesChanged += SaveSoon;
         Keeper.Synced += _ => { RefreshIconRects(); Refresh(); };

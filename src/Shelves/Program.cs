@@ -10,6 +10,11 @@ static class Program
             ApplicationConfiguration.Initialize();
             return Shots.Run(args[1]);
         }
+        if (args.Length > 1 && args[0] == "--compose")
+        {
+            ApplicationConfiguration.Initialize();
+            return Shots.Compose(args[1]);
+        }
         if (args.Length > 1 && args[0] == "--render-icon")
             return IconMaker.Run(args[1]);
         if (args.Length > 1 && args[0] == "--fences-dump")
