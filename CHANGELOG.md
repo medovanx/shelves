@@ -9,11 +9,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - "New shelf" in the desktop's own right-click menu (Settings, General; Windows asks for admin rights once).
 - Import from a Fences backup file: its daily snapshots or a .reg export of its settings.
 - Pin a shelf open so it never rolls up.
-- Drag tabs to reorder them, with the other tabs sliding aside.
 
 ### Changed
 - The tray menu's first line reads "Shelves v1.0.1".
-- Freezing the desktop's drawing on a drop only happens when an icon is dragged, and lifts as soon as the hidden icons are back.
 
 ## [1.0.1] - 2026-11-17
 
