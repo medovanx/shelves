@@ -5,21 +5,21 @@ public enum TitleAlign { Left, Center, Right }
 /// <summary>User preferences, saved as JSON beside the layout.</summary>
 public sealed class Settings
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     public int Version { get; set; } = CurrentVersion;
     /// <summary>"en" or "ar"; empty follows Windows.</summary>
     public string Language { get; set; } = "";
     public bool StartWithWindows { get; set; } = true;
     public bool DoubleClickHides { get; set; } = true;
     /// <summary>How solid a shelf's colour is over the blurred wallpaper, 0 (clear glass) to 100 (solid).</summary>
-    public int Opacity { get; set; } = 60;
+    public int Opacity { get; set; } = 50;
     /// <summary>The colour of every shelf ("#RRGGBB"), or empty for the theme's own.</summary>
     public string Tint { get; set; } = "";
-    public int CornerRadius { get; set; } = 8;
+    public int CornerRadius { get; set; } = 4;
     public TitleAlign TitleAlign { get; set; } = TitleAlign.Center;
-    public int LabelLines { get; set; } = 2;
+    public int LabelLines { get; set; } = 3;
     public IconSize DefaultIconSize { get; set; } = IconSize.Medium;
-    public int HoverDelayMs { get; set; } = 150;
+    public int HoverDelayMs { get; set; } = 0;
     public int LeaveDelayMs { get; set; } = 0;
     public bool HoverToPeek { get; set; } = true;
     /// <summary>Animate rolling up and opening. Shelves' own choice, not Windows' animation effects setting.</summary>
@@ -40,6 +40,14 @@ public sealed class Settings
         }
         // Version 3 rolls up the moment the mouse leaves, unless the user chose a delay of their own.
         if (s.Version < 3 && s.LeaveDelayMs is 300 or 500) s.LeaveDelayMs = 0;
+        // Version 4's defaults, for values the user never changed.
+        if (s.Version < 4)
+        {
+            if (s.CornerRadius == 8) s.CornerRadius = 4;
+            if (s.Opacity is 55 or 60) s.Opacity = 50;
+            if (s.LabelLines == 2) s.LabelLines = 3;
+            if (s.HoverDelayMs is 150 or 300) s.HoverDelayMs = 0;
+        }
         s.Tint = Colors.Normalize(s.Tint);
         s.Opacity = Math.Clamp(s.Opacity, 0, 100);
         s.CornerRadius = Math.Clamp(s.CornerRadius, 0, 16);

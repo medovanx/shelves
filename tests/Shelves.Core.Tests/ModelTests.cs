@@ -131,9 +131,9 @@ public class ModelTests
     public void Settings_from_version_1_get_the_faster_defaults_unless_changed()
     {
         var old = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 300, LeaveDelayMs = 500, Opacity = 55 });
-        Assert.Equal(150, old.HoverDelayMs);
+        Assert.Equal(0, old.HoverDelayMs);
         Assert.Equal(0, old.LeaveDelayMs);
-        Assert.Equal(60, old.Opacity);
+        Assert.Equal(50, old.Opacity);
         var mine = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 700, Opacity = 30 });
         Assert.Equal(700, mine.HoverDelayMs);
         Assert.Equal(30, mine.Opacity);
@@ -172,5 +172,16 @@ public class ModelTests
         Assert.Equal(0, Settings.Migrate(new Settings { Version = 2, LeaveDelayMs = 300 }).LeaveDelayMs);
         Assert.Equal(800, Settings.Migrate(new Settings { Version = 2, LeaveDelayMs = 800 }).LeaveDelayMs);
         Assert.Equal(0, new Settings().LeaveDelayMs);
+    }
+
+    [Fact]
+    public void Version_4_defaults_replace_untouched_values_only()
+    {
+        var d = new Settings();
+        Assert.Equal((4, 50, 3, 0, 0), (d.CornerRadius, d.Opacity, d.LabelLines, d.HoverDelayMs, d.LeaveDelayMs));
+        var old = Settings.Migrate(new Settings { Version = 3, CornerRadius = 8, Opacity = 60, LabelLines = 2, HoverDelayMs = 150 });
+        Assert.Equal((4, 50, 3, 0), (old.CornerRadius, old.Opacity, old.LabelLines, old.HoverDelayMs));
+        var mine = Settings.Migrate(new Settings { Version = 3, CornerRadius = 12, Opacity = 80, LabelLines = 1, HoverDelayMs = 400 });
+        Assert.Equal((12, 80, 1, 400), (mine.CornerRadius, mine.Opacity, mine.LabelLines, mine.HoverDelayMs));
     }
 }
