@@ -505,6 +505,14 @@ sealed class ShelvesApp : ApplicationContext
         m.Items.Add(Item(L.T("RestoreDesktop"), Art.IconRestore, RestoreDesktop));
         if (FencesReader.Available()) m.Items.Add(Item(L.T("ImportFences"), Art.IconAdd, ImportFences));
         m.Items.Add(new ToolStripSeparator());
+        var startup = new ToolStripMenuItem(L.T("StartWithWindows")) { Checked = Settings.StartWithWindows };
+        startup.Click += (_, _) =>
+        {
+            Settings.StartWithWindows = !Settings.StartWithWindows;
+            SaveSettings();
+            Autostart.Apply(Settings.StartWithWindows);
+        };
+        m.Items.Add(startup);
         m.Items.Add(Item(L.T("Settings"), Art.IconSettings, OpenSettings));
         m.Items.Add(Item(L.T("CheckForUpdates"), Art.IconUpdate, () => OpenSettings(updates: true)));
         m.Items.Add(new ToolStripSeparator());
