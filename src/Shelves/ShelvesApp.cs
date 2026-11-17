@@ -18,6 +18,8 @@ sealed class ShelvesApp : ApplicationContext
     public Settings Settings { get; }
     public Layout Layout { get; private set; }
     public Theme Theme { get; set; } = Theme.Current;
+    /// <summary>Whether icon labels get a shadow, as Windows draws them on the desktop.</summary>
+    public bool LabelShadows { get; private set; } = Native.LabelShadows();
     public Wallpaper Wallpaper { get; } = new();
     public DesktopView View { get; } = new();
     public IconKeeper Keeper { get; }
@@ -383,6 +385,7 @@ sealed class ShelvesApp : ApplicationContext
         if (c is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Desktop)
         {
             Theme = Theme.Current;
+            LabelShadows = Native.LabelShadows();
             Wallpaper.Reset();
         }
     }

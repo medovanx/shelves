@@ -258,6 +258,10 @@ sealed partial class ShelfWindow
         int px = IconPx;
         using var lf = new Font("Segoe UI", 12f * s, GraphicsUnit.Pixel);
         using var textBrush = new SolidBrush(TextColor);
+        // Windows' icon-label shadows setting, for light text only (a shadow under dark text just smudges it).
+        bool shadowed = app.LabelShadows && TextColor.GetBrightness() > 0.5f;
+        using var shadowHard = new SolidBrush(Color.FromArgb(170, 0, 0, 0));
+        using var shadowSoft = new SolidBrush(Color.FromArgb(70, 0, 0, 0));
         using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near, Trimming = StringTrimming.EllipsisWord };
         if (L.Ar) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;
 
@@ -290,6 +294,13 @@ sealed partial class ShelfWindow
                 g.DrawImage(icon, dr);
             }
             var lr = new RectangleF(cell.X + 2 * s, ir.Bottom + 4 * s, cell.Width - 4 * s, LabelH);
+            if (shadowed)
+            {
+                // Like the desktop's labels: a soft dark shadow down and to the right.
+                g.DrawString(it.Label, lf, shadowSoft, new RectangleF(lr.X + 1, lr.Y + 2, lr.Width, lr.Height), sf);
+                g.DrawString(it.Label, lf, shadowSoft, new RectangleF(lr.X + 2, lr.Y + 1, lr.Width, lr.Height), sf);
+                g.DrawString(it.Label, lf, shadowHard, new RectangleF(lr.X + 1, lr.Y + 1, lr.Width, lr.Height), sf);
+            }
             g.DrawString(it.Label, lf, textBrush, lr, sf);
         }
 

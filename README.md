@@ -29,6 +29,8 @@ Roll a shelf up to its title, dock it to the top, bottom, left or right edge, an
 - **Draw a shelf.** Right-drag a box on the empty desktop and pick **Create shelf here**. A plain right-click still opens Explorer's own menu.
 - **Roll up.** Double-click a shelf's title to roll it up to just its title bar, and hover over it to peek inside. It rolls back up when the mouse leaves.
 - **Every edge.** Drag a shelf against the top, bottom, left or right edge and it docks there. A shelf on the left or right edge rolls into a thin vertical tab with its title turned sideways, and slides open across the screen. Shelves on the same edge sit side by side.
+- **Tabs.** Give a shelf several tabs, each with its own icons or folder. Click a tab or scroll over the strip to switch, and drag icons onto a tab to put them there.
+- **Your colours.** Pick any colour and opacity for all shelves, or give one shelf its own from its menu.
 - **Folder portals.** Turn a shelf into a live view of any folder, such as Downloads, with the same icon actions.
 - **Hide everything.** Double-click the empty desktop to hide every shelf and icon, and again to bring them back.
 - **Frosted glass.** Shelves blur the wallpaper behind them, tinted to Windows' dark or light theme. With transparency effects off, they use a solid background.
@@ -75,6 +77,9 @@ Close Stardock Fences or any other desktop-icon organizer first. Both would move
 | Move or resize | Drag the title or any edge |
 | Rename | **Rename** in the shelf's menu, or F2 with nothing selected |
 | Show a folder | **Show a folder...** in the shelf's menu |
+| Add a tab | **New tab** in the shelf's menu, or **+** on the tab strip |
+| Rename or remove a tab | Double-click it, or right-click it |
+| Colour one shelf | **Color** and **Opacity** in the shelf's menu |
 | Hide everything | Double-click the empty desktop |
 | Undo a change | **Snapshots** in the tray menu |
 | Put every icon back | **Restore desktop** in the tray menu |
@@ -84,8 +89,8 @@ Close Stardock Fences or any other desktop-icon organizer first. Both would move
 | Page | Options |
 |---|---|
 | General | Language, start with Windows, double-click to hide |
-| Appearance | Background strength, corner radius, title alignment, label lines, icon size for new shelves |
-| Roll up | Hover to open, open delay, roll-up delay |
+| Appearance | Colour, opacity, corner radius, title alignment, label lines, icon size for new shelves |
+| Roll up | Animate rolling up, hover to open, open delay, roll-up delay |
 | Snapshots | Save, restore and delete snapshots |
 | Updates | Automatic checks, check now, GitHub page, release notes |
 
@@ -138,6 +143,8 @@ Shelves/
 - **ارسم رفًا:** اسحب بالزر الأيمن مربعًا على سطح المكتب الفارغ، ثم اختر **إنشاء رف هنا**.
 - **الطي:** انقر نقرًا مزدوجًا على عنوان الرف لطيّه، ومرّر المؤشر فوقه لفتحه مؤقتًا.
 - **كل الحواف:** ثبّت الرف على الحافة العليا أو السفلى أو اليسرى أو اليمنى. على الحافتين الجانبيتين ينطوي الرف إلى شريط عمودي.
+- **تبويبات:** اجعل للرف عدة تبويبات، لكل منها أيقوناته أو مجلده.
+- **ألوانك:** اختر لونًا وعتامة لكل الرفوف، أو لرف واحد من قائمته.
 - **عرض مجلد:** اجعل الرف يعرض محتويات أي مجلد مباشرة.
 - **إخفاء كل شيء:** انقر نقرًا مزدوجًا على سطح المكتب الفارغ.
 - **لقطات:** يُحفظ الترتيب يوميًا، ويمكنك حفظ لقطاتك واستعادتها.

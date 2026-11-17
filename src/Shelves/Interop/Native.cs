@@ -90,6 +90,13 @@ static class Native
         return k?.GetValue("SystemUsesLightTheme") is not int v || v == 0;
     }
 
+    /// <summary>Windows' "Use drop shadows for icon labels on the desktop" (Performance options).</summary>
+    public static bool LabelShadows()
+    {
+        using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+        return k?.GetValue("ListviewShadow") is int v && v != 0;
+    }
+
     /// <summary>False when the user turned off transparency effects in Windows.</summary>
     public static bool TransparencyOn()
     {
