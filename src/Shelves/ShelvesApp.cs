@@ -169,7 +169,7 @@ sealed class ShelvesApp : ApplicationContext
     static void Thaw(IntPtr lv)
     {
         if (lv == IntPtr.Zero) return;
-        Native.SendMessageTimeout(lv, 0x000B /* WM_SETREDRAW */, (IntPtr)1, IntPtr.Zero, 0x2, 200, out _);
+        Native.LockWindowUpdate(IntPtr.Zero);
         RedrawWindow(lv, IntPtr.Zero, IntPtr.Zero, 0x1 | 0x4 | 0x80 /* INVALIDATE | ERASE | ALLCHILDREN */);
     }
 

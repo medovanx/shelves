@@ -101,10 +101,11 @@ sealed class DesktopInput : IDisposable
                     {
                         pressedOnDesktop = false;
                         bool dragged = Math.Abs(pt.X - pressedAt.X) > 4 || Math.Abs(pt.Y - pressedAt.Y) > 4;
-                        // A drop is about to make Explorer pull hidden icons back on screen. Stop the list view
-                        // drawing first (a posted message is handled before this button-up), so they never show.
+                        // A drop is about to make Explorer pull hidden icons back on screen. Lock the list view's
+                        // drawing first, so they never show. WM_SETREDRAW does not hold: Explorer turns drawing back on
+                        // while it handles the drop. LockWindowUpdate takes effect at once and only we lift it.
                         bool frozen = dragged && AnyShelved() && ListView() is var lv && lv != IntPtr.Zero
-                                      && Native.PostMessage(lv, 0x000B /* WM_SETREDRAW */, IntPtr.Zero, IntPtr.Zero);
+                                      && Native.LockWindowUpdate(lv);
                         invoker.BeginInvoke(() => DesktopRelease?.Invoke(frozen));
                     }
                     break;

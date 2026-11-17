@@ -65,7 +65,7 @@ sealed partial class ShelfWindow
         {
             var r = tabs[i];
             r.Offset(shift);
-            bool active = i == Model.Active, over = i == hoverTab || i == dragTab;
+            bool active = i == Model.Active, over = i == hoverTab || i == dragTab || i == draggedTab;
             if (active || over)
                 Art.FillRound(g, r, 6 * s, active ? Color.FromArgb(Th.Dark ? 70 : 55, Th.Accent) : Color.FromArgb(Th.Dark ? 26 : 20, TextColor));
             var flags = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPadding;
@@ -165,14 +165,33 @@ sealed partial class ShelfWindow
         m.Show(screen);
     }
 
-    void MoveTab(int i, int by)
+    void MoveTab(int i, int by) { MoveTabTo(i, i + by); app.SaveSoon(); }
+
+    /// <summary>Moves tab <paramref name="from"/> to position <paramref name="to"/>, keeping the same tab shown.</summary>
+    void MoveTabTo(int from, int to)
     {
-        int j = i + by;
-        if (j < 0 || j >= Model.Tabs.Count) return;
-        (Model.Tabs[i], Model.Tabs[j]) = (Model.Tabs[j], Model.Tabs[i]);
-        if (Model.Active == i) Model.Active = j; else if (Model.Active == j) Model.Active = i;
-        app.SaveSoon();
+        if (from < 0 || from >= Model.Tabs.Count || to < 0 || to >= Model.Tabs.Count || from == to) return;
+        var shown = Model.Current;
+        var tab = Model.Tabs[from];
+        Model.Tabs.RemoveAt(from);
+        Model.Tabs.Insert(to, tab);
+        Model.Active = Model.Tabs.IndexOf(shown);
         Apply();
+    }
+
+    /// <summary>
+    /// While dragging a tab: the tab whose half the cursor is past, anywhere along the strip's row (the cursor
+    /// may leave the strip's height, or go past its ends).
+    /// </summary>
+    int TabAtStrip(Point window)
+    {
+        if (!TabsShown) return -1;
+        var p = ToOpen(window);
+        var (tabs, _) = TabRects();
+        if (tabs.Count == 0) return -1;
+        for (int i = 0; i < tabs.Count; i++)
+            if (L.Ar ? p.X >= tabs[i].Left : p.X < tabs[i].Right) return i;
+        return tabs.Count - 1;
     }
 
     /// <summary>During a drag, resting on a tab for a moment shows it, so icons can be dropped into it.</summary>

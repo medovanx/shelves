@@ -5,7 +5,8 @@ namespace Shelves.UI.Shelf;
 
 sealed partial class ShelfWindow
 {
-    enum DragKind { None, TitlePending, Move, Resize, ItemPending, Marquee }
+    enum DragKind { None, TitlePending, Move, Resize, ItemPending, Marquee, TabPending, TabMove }
+    int draggedTab = -1;
     [Flags] enum Edges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
 
     DragKind drag;
@@ -82,7 +83,15 @@ sealed partial class ShelfWindow
         if (InTitle(e.Location)) { drag = DragKind.TitlePending; Capture = true; return; }
         int tab = TabAt(e.Location);
         if (tab == -2) { AddTab(); return; }
-        if (tab >= 0) { SelectTab(tab); return; }
+        if (tab >= 0)
+        {
+            // Shown at once; dragging it sideways moves it along the strip.
+            SelectTab(tab);
+            draggedTab = tab;
+            drag = DragKind.TabPending;
+            Capture = true;
+            return;
+        }
 
         var it = ItemAt(e.Location);
         if (it != null)
@@ -128,6 +137,15 @@ sealed partial class ShelfWindow
         bool moved = Math.Abs(now.X - downScreen.X) > ds.Width || Math.Abs(now.Y - downScreen.Y) > ds.Height;
         switch (drag)
         {
+            case DragKind.TabPending when moved:
+                drag = DragKind.TabMove;
+                goto case DragKind.TabMove;
+            case DragKind.TabMove:
+            {
+                int over = TabAtStrip(e.Location);
+                if (over >= 0 && over != draggedTab) { MoveTabTo(draggedTab, over); draggedTab = over; }
+                return;
+            }
             case DragKind.TitlePending when moved:
                 drag = DragKind.Move;
                 goto case DragKind.Move;
@@ -194,6 +212,14 @@ sealed partial class ShelfWindow
                 break;
             case DragKind.Marquee:
                 Apply();
+                break;
+            case DragKind.TabMove:
+                draggedTab = -1;
+                app.SaveSoon();
+                Apply();
+                break;
+            case DragKind.TabPending:
+                draggedTab = -1;
                 break;
         }
         if (e.Button == MouseButtons.Right && TabAt(e.Location) is var rt and >= 0)
