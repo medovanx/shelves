@@ -132,7 +132,7 @@ public class ModelTests
     {
         var old = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 300, LeaveDelayMs = 500, Opacity = 55 });
         Assert.Equal(150, old.HoverDelayMs);
-        Assert.Equal(300, old.LeaveDelayMs);
+        Assert.Equal(0, old.LeaveDelayMs);
         Assert.Equal(60, old.Opacity);
         var mine = Settings.Migrate(new Settings { Version = 1, HoverDelayMs = 700, Opacity = 30 });
         Assert.Equal(700, mine.HoverDelayMs);
@@ -164,5 +164,13 @@ public class ModelTests
         var m = new ShelfModel { Tint = "#5E1F32", Opacity = 80 }.Clone();
         Assert.Equal("#5E1F32", m.Tint);
         Assert.Equal(80, m.Opacity);
+    }
+
+    [Fact]
+    public void Version_2_settings_roll_up_instantly_unless_the_delay_was_changed()
+    {
+        Assert.Equal(0, Settings.Migrate(new Settings { Version = 2, LeaveDelayMs = 300 }).LeaveDelayMs);
+        Assert.Equal(800, Settings.Migrate(new Settings { Version = 2, LeaveDelayMs = 800 }).LeaveDelayMs);
+        Assert.Equal(0, new Settings().LeaveDelayMs);
     }
 }

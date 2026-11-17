@@ -100,6 +100,7 @@ public static class L
         ["LabelLines"] = ("Label lines", "أسطر التسمية"),
         ["DefaultIconSize"] = ("Icon size for new shelves", "حجم الأيقونات للرفوف الجديدة"),
         ["HoverToPeek"] = ("Hover over a rolled-up shelf to open it", "فتح الرف المطوي عند مرور المؤشر"),
+        ["AnimateRoll"] = ("Animate rolling up", "تحريك الطي"),
         ["HoverDelay"] = ("Open after (ms)", "الفتح بعد (مللي ثانية)"),
         ["LeaveDelay"] = ("Roll up after leaving (ms)", "الطي بعد المغادرة (مللي ثانية)"),
         ["AutoCheck"] = ("Check for updates automatically", "التحقق من التحديثات تلقائيًا"),

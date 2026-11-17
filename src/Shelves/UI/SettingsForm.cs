@@ -18,7 +18,7 @@ sealed class SettingsForm : Form
     readonly Segmented segAlign = new(L.T("AlignLeft"), L.T("AlignCenter"), L.T("AlignRight")) { Width = 260 };
     readonly Segmented segSize = new(L.T("SizeSmall"), L.T("SizeMedium"), L.T("SizeLarge")) { Width = 260 };
     // Roll up
-    readonly ToggleSwitch tglPeek = new();
+    readonly ToggleSwitch tglPeek = new(), tglAnimate = new();
     readonly ThemedNumber numHover = Num(0, 3000), numLeave = Num(0, 5000);
     // Snapshots
     readonly FlowLayoutPanel snapList = new() { FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = Padding.Empty };
@@ -152,12 +152,14 @@ sealed class SettingsForm : Form
     void BuildRollUp()
     {
         tglPeek.Checked = s.HoverToPeek;
+        tglAnimate.Checked = s.AnimateRoll;
         tglPeek.CheckedChanged += (_, _) => SyncEnabled();
         numHover.Value = s.HoverDelayMs;
         numHover.Increment = 50;
         numLeave.Value = s.LeaveDelayMs;
         numLeave.Increment = 50;
         AddPage(Art.IconRoll, L.T("RollUpPage"), Card(L.T("RollUpPage"), Art.IconRoll,
+            Row(L.T("AnimateRoll"), tglAnimate),
             Row(L.T("HoverToPeek"), tglPeek),
             Row(L.T("HoverDelay"), numHover),
             Row(L.T("LeaveDelay"), numLeave)));
@@ -291,6 +293,7 @@ sealed class SettingsForm : Form
         s.TitleAlign = (TitleAlign)segAlign.Selected;
         s.DefaultIconSize = (IconSize)segSize.Selected;
         s.HoverToPeek = tglPeek.Checked;
+        s.AnimateRoll = tglAnimate.Checked;
         s.HoverDelayMs = (int)numHover.Value;
         s.LeaveDelayMs = (int)numLeave.Value;
         s.CheckUpdates = tglAutoCheck.Checked;

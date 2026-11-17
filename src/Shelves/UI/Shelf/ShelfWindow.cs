@@ -153,7 +153,7 @@ sealed partial class ShelfWindow : Form
     void AnimateTo(double target)
     {
         animTarget = target;
-        if (!Native.AnimationsOn() || !Visible) { shown = target; anim.Stop(); LayoutItems(); Apply(); return; }
+        if (!app.Settings.AnimateRoll || !Visible) { shown = target; anim.Stop(); LayoutItems(); Apply(); return; }
         animFrom = shown;
         animStart = DateTime.UtcNow;
         if (!anim.Enabled) CacheOpenFrame();
@@ -172,7 +172,8 @@ sealed partial class ShelfWindow : Form
     void HoverTick()
     {
         if (!Model.Rolled || !app.Settings.HoverToPeek || !Visible) { enteredAt = leftAt = null; return; }
-        var inside = Bounds.Contains(Cursor.Position);
+        var now0 = Target(); // the real size: WinForms' Bounds does not follow UpdateLayeredWindow
+        var inside = ToRect(now0).Contains(Cursor.Position);
         var now = DateTime.UtcNow;
         if (inside)
         {

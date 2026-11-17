@@ -19,7 +19,10 @@ sealed partial class ShelfWindow
     Rectangle MarqueeRect => Rectangle.FromLTRB(Math.Min(marqueeFrom.X, marqueeTo.X), Math.Min(marqueeFrom.Y, marqueeTo.Y),
                                                 Math.Max(marqueeFrom.X, marqueeTo.X), Math.Max(marqueeFrom.Y, marqueeTo.Y));
 
-    bool InTitle(Point p) => TitleRect(ClientSize).Contains(p);
+    /// <summary>The window's real size now (WinForms' Width and Height do not follow UpdateLayeredWindow).</summary>
+    Size Now => new(Target().W, Target().H);
+
+    bool InTitle(Point p) => TitleRect(Now).Contains(p);
 
     Edges EdgesAt(Point p)
     {
@@ -27,9 +30,9 @@ sealed partial class ShelfWindow
         int g = (int)(6 * S);
         var e = Edges.None;
         if (p.X < g) e |= Edges.Left;
-        if (p.X >= Width - g) e |= Edges.Right;
+        if (p.X >= Now.Width - g) e |= Edges.Right;
         if (p.Y < g) e |= Edges.Top;
-        if (p.Y >= Height - g) e |= Edges.Bottom;
+        if (p.Y >= Now.Height - g) e |= Edges.Bottom;
         return e;
     }
 

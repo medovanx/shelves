@@ -5,7 +5,7 @@ public enum TitleAlign { Left, Center, Right }
 /// <summary>User preferences, saved as JSON beside the layout.</summary>
 public sealed class Settings
 {
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     public int Version { get; set; } = CurrentVersion;
     /// <summary>"en" or "ar"; empty follows Windows.</summary>
     public string Language { get; set; } = "";
@@ -20,8 +20,10 @@ public sealed class Settings
     public int LabelLines { get; set; } = 2;
     public IconSize DefaultIconSize { get; set; } = IconSize.Medium;
     public int HoverDelayMs { get; set; } = 150;
-    public int LeaveDelayMs { get; set; } = 300;
+    public int LeaveDelayMs { get; set; } = 0;
     public bool HoverToPeek { get; set; } = true;
+    /// <summary>Animate rolling up and opening. Shelves' own choice, not Windows' animation effects setting.</summary>
+    public bool AnimateRoll { get; set; } = true;
     public bool CheckUpdates { get; set; } = true;
     public DateTime LastUpdateCheck { get; set; }
 
@@ -36,6 +38,8 @@ public sealed class Settings
             if (s.LeaveDelayMs == 500) s.LeaveDelayMs = 300;
             if (s.Opacity == 55) s.Opacity = 60;
         }
+        // Version 3 rolls up the moment the mouse leaves, unless the user chose a delay of their own.
+        if (s.Version < 3 && s.LeaveDelayMs is 300 or 500) s.LeaveDelayMs = 0;
         s.Tint = Colors.Normalize(s.Tint);
         s.Opacity = Math.Clamp(s.Opacity, 0, 100);
         s.CornerRadius = Math.Clamp(s.CornerRadius, 0, 16);
