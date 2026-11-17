@@ -200,6 +200,13 @@ sealed partial class ShelfWindow
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
+        // Over the tab strip, the wheel moves between tabs.
+        if (TabAt(e.Location) != -1 || (TabsShown && TabStrip.Contains(ToOpen(e.Location))))
+        {
+            int next = Model.Active + (e.Delta > 0 ? -1 : 1);
+            if (next >= 0 && next < Model.Tabs.Count) SelectTab(next);
+            return;
+        }
         int max = Math.Max(0, ContentHeight - ContentRect.Height);
         if (max == 0) return;
         scroll = Math.Clamp(scroll - e.Delta * CellH / 240, 0, max);

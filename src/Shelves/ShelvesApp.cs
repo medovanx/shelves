@@ -34,7 +34,9 @@ sealed class ShelvesApp : ApplicationContext
     readonly System.Windows.Forms.Timer slowTimer = new() { Interval = 60_000 };
     readonly List<FileSystemWatcher> watchers = [];
     readonly Native.WinEventProc winEvent;
-    IntPtr foregroundHook;
+    IntPtr foregroundHook, moveHook;
+    readonly Native.WinEventProc moveEvent;
+    bool checkQueued;
     List<Rectangle> iconRects = [];
     bool hiddenAll;
     bool autoArrangeWasOn;
@@ -64,12 +66,24 @@ sealed class ShelvesApp : ApplicationContext
         input = new DesktopInput(messages.Invoker, EmptyDesktopAt, hook: !shot) { Theme = () => Theme };
         input.BoxDrawn += OnBoxDrawn;
         input.DesktopDoubleClick += () => { if (Settings.DoubleClickHides) ToggleHideAll(); };
+        input.IsDesktop = IsDesktopAt;
+        input.ListView = () => View.ListView;
+        input.AnyShelved = () => Layout.Shelves.Any(s => s.AllItems.Any());
+        input.DesktopRelease += CheckBurst;
 
         // Show desktop (Win+D) and clicks on the desktop raise it over everything: lift the shelves with it.
         winEvent = (_, _, hwnd, _, _, _, _) =>
         {
             var c = Native.ClassOf(hwnd);
             if (c is "Progman" or "WorkerW" or "SysListView32" or "SHELLDLL_DefView") PlaceSoon();
+        };
+        // Explorer moves every off-screen icon back on screen when an icon is dropped on the desktop. Its list
+        // view reports the moves at once; hide the shelved icons again on the spot, not at the next timer tick.
+        moveEvent = (_, _, hwnd, _, _, _, _) =>
+        {
+            if (hwnd != View.ListView || checkQueued) return;
+            checkQueued = true;
+            messages.Invoker.BeginInvoke(() => { checkQueued = false; Keeper.Check(); });
         };
         if (!shot) foregroundHook = Native.SetWinEventHook(3 /* EVENT_SYSTEM_FOREGROUND */, 3, IntPtr.Zero, winEvent, 0, 0, 0 /* OUTOFCONTEXT */);
 
@@ -109,6 +123,7 @@ sealed class ShelvesApp : ApplicationContext
     bool Attach()
     {
         if (!View.Attach()) return false;
+        HookListView();
         uint flags = View.FolderFlags;
         if ((flags & DesktopView.FWF_AUTOARRANGE) != 0)
         {
@@ -127,6 +142,46 @@ sealed class ShelvesApp : ApplicationContext
         if (hiddenAll) Native.ShowWindow(View.ListView, 0);
         PlaceAll();
         return true;
+    }
+
+    /// <summary>
+    /// Dropping an icon on the desktop makes Explorer pull every off-screen icon back on screen, and its list view
+    /// does not report it. After a release on the desktop, check often for half a second, so shelved icons are
+    /// hidden again within a frame or two instead of showing until the next one-second check.
+    /// </summary>
+    void CheckBurst(bool frozen)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var lv = View.ListView;
+        var t = new System.Windows.Forms.Timer { Interval = 10 };
+        t.Tick += (_, _) =>
+        {
+            bool fixedNow = Keeper.Check();
+            // Drawing comes back once the hidden icons are parked again, and in any case within 400 ms.
+            if (frozen && (fixedNow || sw.ElapsedMilliseconds > 400)) { Thaw(lv); frozen = false; }
+            if (sw.ElapsedMilliseconds > 700) { t.Stop(); t.Dispose(); if (frozen) Thaw(lv); }
+        };
+        t.Start();
+    }
+
+    static void Thaw(IntPtr lv)
+    {
+        if (lv == IntPtr.Zero) return;
+        Native.SendMessageTimeout(lv, 0x000B /* WM_SETREDRAW */, (IntPtr)1, IntPtr.Zero, 0x2, 200, out _);
+        RedrawWindow(lv, IntPtr.Zero, IntPtr.Zero, 0x1 | 0x4 | 0x80 /* INVALIDATE | ERASE | ALLCHILDREN */);
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern bool RedrawWindow(IntPtr hwnd, IntPtr rect, IntPtr rgn, uint flags);
+
+    /// <summary>Listens for icon moves in Explorer's desktop list view (out of context: nothing is loaded into Explorer).</summary>
+    void HookListView()
+    {
+        if (ShotMode) return;
+        if (moveHook != IntPtr.Zero) Native.UnhookWinEvent(moveHook);
+        Native.GetWindowThreadProcessId(View.ListView, out uint pid);
+        // EVENT_OBJECT_REORDER (0x8004) through EVENT_OBJECT_LOCATIONCHANGE (0x800B).
+        moveHook = Native.SetWinEventHook(0x8004, 0x800B, IntPtr.Zero, moveEvent, pid, 0, 0);
     }
 
     /// <summary>Explorer restarted (the taskbar came back): find the new desktop and hide icons again.</summary>
@@ -300,7 +355,7 @@ sealed class ShelvesApp : ApplicationContext
         if (MessageBox.Show(L.F("DeleteShelfAsk", title), L.T("AppName"), MessageBoxButtons.OKCancel, MessageBoxIcon.Question,
                 MessageBoxDefaultButton.Button2, L.Ar ? MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign : 0) != DialogResult.OK)
             return;
-        foreach (var n in w.Model.Items.ToList()) { Layout.Unshelve(n); Keeper.Unhide(n); }
+        foreach (var n in w.Model.AllItems.ToList()) { Layout.Unshelve(n); Keeper.Unhide(n); }
         Layout.Shelves.Remove(w.Model);
         Windows.Remove(w);
         w.Close();
@@ -517,6 +572,7 @@ sealed class ShelvesApp : ApplicationContext
             if (View.Attached)
             {
                 Keeper.RestoreAll();
+                Thaw(View.ListView);
                 Native.ShowWindow(View.ListView, 5);
                 if (autoArrangeWasOn) View.SetFolderFlags(DesktopView.FWF_AUTOARRANGE, DesktopView.FWF_AUTOARRANGE);
             }
@@ -533,6 +589,7 @@ sealed class ShelvesApp : ApplicationContext
         SaveNow();
         RestoreExplorer();
         if (foregroundHook != IntPtr.Zero) Native.UnhookWinEvent(foregroundHook);
+        if (moveHook != IntPtr.Zero) Native.UnhookWinEvent(moveHook);
         input.Dispose();
         foreach (var w in watchers) w.Dispose();
         foreach (var w in Windows.ToList()) { w.Close(); w.Dispose(); }

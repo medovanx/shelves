@@ -19,8 +19,8 @@ sealed partial class ShelfWindow
     /// <summary>Where icons go, in client coordinates of the open shelf.</summary>
     Rectangle ContentRect =>
         Model.Edge == Edge.Bottom
-            ? new Rectangle(Pad, Pad, open.W - Pad * 2, open.H - TitleH - Pad * 2)
-            : new Rectangle(Pad, TitleH + Pad / 2, open.W - Pad * 2, open.H - TitleH - Pad - Pad / 2);
+            ? new Rectangle(Pad, Pad, open.W - Pad * 2, open.H - TitleH - TabH - Pad * 2)
+            : new Rectangle(Pad, TitleH + TabH + Pad / 2, open.W - Pad * 2, open.H - TitleH - TabH - Pad - Pad / 2);
 
     /// <summary>
     /// Offset from the open shelf's client coordinates to the window's while it is part rolled: content keeps its
@@ -208,9 +208,12 @@ sealed partial class ShelfWindow
             }
         }
 
-        // Icons, clipped to the visible part of the content.
+        // Tabs, then icons, clipped to the visible part of the shelf.
         if (shown > 0.05 && !SideTab || IsOpen)
+        {
+            PaintTabs(g, box);
             PaintItems(g, box, s);
+        }
 
         g.ResetClip();
         DrawBorder(g, box);
@@ -225,11 +228,11 @@ sealed partial class ShelfWindow
 
     void DrawSideTitle(Graphics g, string text, Font f, Rectangle tab)
     {
-        // Left edge reads bottom to top, right edge top to bottom, both facing the screen's middle.
+        // Right edge reads bottom to top, left edge top to bottom: the tops of the letters face the screen's edge.
         var state = g.Save();
         bool left = Model.Edge == Edge.Left;
         g.TranslateTransform(tab.Width / 2f, tab.Height / 2f);
-        g.RotateTransform(left ? -90 : 90);
+        g.RotateTransform(left ? 90 : -90);
         var rr = new RectangleF(-tab.Height / 2f + 10 * S, -tab.Width / 2f, tab.Height - 20 * S, tab.Width);
         using var sf = new StringFormat(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter };
         if (L.Ar) sf.FormatFlags |= StringFormatFlags.DirectionRightToLeft;

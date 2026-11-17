@@ -63,6 +63,9 @@ static class Native
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
     [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out RECT value, int size);
 
+    [DllImport("gdi32.dll")] public static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
+    [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr hwnd, IntPtr rgn, bool redraw);
+
     public static readonly IntPtr HWND_BOTTOM = 1;
     public const uint SWP_NOSIZE = 0x1, SWP_NOMOVE = 0x2, SWP_NOZORDER = 0x4, SWP_NOACTIVATE = 0x10, SWP_SHOWWINDOW = 0x40;
     public const int WM_WINDOWPOSCHANGING = 0x46, WM_MOUSEACTIVATE = 0x21, WM_NCHITTEST = 0x84, WM_DISPLAYCHANGE = 0x7E,
@@ -111,6 +114,23 @@ static class Native
         DwmSetWindowAttribute(hwnd, 33, ref pref, sizeof(int));
         int d = dark ? 1 : 0;
         DwmSetWindowAttribute(hwnd, 20, ref d, sizeof(int));
+    }
+
+    /// <summary>Rounded corners from Windows, without the shadow it draws around rounded popups.</summary>
+    public static void RoundCornersNoShadow(IntPtr hwnd, bool dark)
+    {
+        // Windows' rounded corners bring its popup shadow with them, so round with a window region instead.
+        RoundCorners(hwnd, dark, round: false);
+        if (GetWindowRect(hwnd, out var r))
+        {
+            float s = GetDpiForWindow(hwnd) / 96f;
+            int d = (int)(8 * s);
+            SetWindowRgn(hwnd, CreateRoundRectRgn(0, 0, r.Width + 1, r.Height + 1, d, d), true);
+        }
+        int disabled = 1; // DWMNCRP_DISABLED
+        DwmSetWindowAttribute(hwnd, 2, ref disabled, sizeof(int));
+        int none = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE: no accent border either
+        DwmSetWindowAttribute(hwnd, 34, ref none, sizeof(int));
     }
 
     /// <summary>Blurs what is behind the window (accent 3 is blur, 4 acrylic). Off when <paramref name="on"/> is false.</summary>

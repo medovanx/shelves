@@ -27,6 +27,16 @@ sealed class DesktopInput : IDisposable
     /// <summary>A box was drawn on the desktop (screen rectangle, and where the button was released).</summary>
     public event Action<Rectangle, Point>? BoxDrawn;
     public event Action? DesktopDoubleClick;
+    /// <summary>The left button went up after being pressed on the desktop (an icon may have been dropped).</summary>
+    public event Action<bool>? DesktopRelease;
+    /// <summary>Set by the app: the desktop list view, frozen for the moment a dragged icon is dropped.</summary>
+    public Func<IntPtr> ListView { get; set; } = () => IntPtr.Zero;
+    /// <summary>Set by the app: true while icons are shelved (only then is there anything to hide).</summary>
+    public Func<bool> AnyShelved { get; set; } = () => false;
+    Point pressedAt;
+    /// <summary>Set by the app: true when a point is on Explorer's desktop at all (icon or not).</summary>
+    public Func<Point, bool> IsDesktop { get; set; } = _ => false;
+    bool pressedOnDesktop;
     public Func<Theme> Theme { get; set; } = () => Shelves.UI.Styling.Theme.Current;
 
     public DesktopInput(Control invoker, Func<Point, bool> emptyDesktop, bool hook = true)
@@ -86,8 +96,22 @@ sealed class DesktopInput : IDisposable
                         return 1;
                     }
                     break;
+                case 0x202: // WM_LBUTTONUP
+                    if (pressedOnDesktop)
+                    {
+                        pressedOnDesktop = false;
+                        bool dragged = Math.Abs(pt.X - pressedAt.X) > 4 || Math.Abs(pt.Y - pressedAt.Y) > 4;
+                        // A drop is about to make Explorer pull hidden icons back on screen. Stop the list view
+                        // drawing first (a posted message is handled before this button-up), so they never show.
+                        bool frozen = dragged && AnyShelved() && ListView() is var lv && lv != IntPtr.Zero
+                                      && Native.PostMessage(lv, 0x000B /* WM_SETREDRAW */, IntPtr.Zero, IntPtr.Zero);
+                        invoker.BeginInvoke(() => DesktopRelease?.Invoke(frozen));
+                    }
+                    break;
                 case 0x201: // WM_LBUTTONDOWN
                 {
+                    pressedOnDesktop = IsDesktop(pt);
+                    pressedAt = pt;
                     long now = Environment.TickCount64;
                     bool empty = emptyDesktop(pt);
                     int dx = Native.GetSystemMetrics(36 /* SM_CXDOUBLECLK */), dy = Native.GetSystemMetrics(37);

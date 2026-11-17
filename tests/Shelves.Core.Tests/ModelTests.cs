@@ -184,4 +184,48 @@ public class ModelTests
         var mine = Settings.Migrate(new Settings { Version = 3, CornerRadius = 12, Opacity = 80, LabelLines = 1, HoverDelayMs = 400 });
         Assert.Equal((12, 80, 1, 400), (mine.CornerRadius, mine.Opacity, mine.LabelLines, mine.HoverDelayMs));
     }
+
+    [Fact]
+    public void Old_layouts_become_a_first_tab()
+    {
+        var dir = Directory.CreateTempSubdirectory().FullName;
+        try
+        {
+            var path = Path.Combine(dir, "layout.json");
+            File.WriteAllText(path, """{ "Version": 1, "Shelves": [ { "Title": "Games", "Items": ["a", "b"] }, { "Title": "Docs", "Portal": "C:\\Docs" } ] }""");
+            var l = LayoutStore.Load(path);
+            Assert.Equal(["a", "b"], Assert.Single(l.Shelves[0].Tabs).Items);
+            Assert.Equal(@"C:\Docs", l.Shelves[1].Portal);
+            LayoutStore.Save(path, l);
+            var text = File.ReadAllText(path);
+            Assert.DoesNotContain("\"Items\": null", text);
+            var back = LayoutStore.Load(path);
+            Assert.Equal(["a", "b"], back.Shelves[0].Items);
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Items_in_every_tab_are_shelved_and_found()
+    {
+        var l = new Layout();
+        var s = new ShelfModel();
+        s.Tabs.Add(new ShelfTab { Title = "Two", Items = ["x"] });
+        s.Tabs.Add(new ShelfTab { Title = "Folder", Portal = @"C:\Downloads", Items = ["ignored"] });
+        l.Shelves.Add(s);
+        l.Shelve("a", s); // the shown tab (the first)
+        l.Shelve("b", s, tab: 1);
+        Assert.Equal(["a"], s.Tabs[0].Items);
+        Assert.Equal(["x", "b"], s.Tabs[1].Items);
+        Assert.Equal(["a", "x", "b"], l.AllShelved());
+        Assert.Same(s, l.ShelfOf("x"));
+        Assert.Null(l.ShelfOf("ignored")); // portal tabs hold no desktop items
+        l.Shelve("x", s, tab: 0); // between tabs
+        Assert.Equal(["a", "x"], s.Tabs[0].Items);
+        Assert.Equal(["b"], s.Tabs[1].Items);
+        Assert.True(l.Rename("b", "c"));
+        Assert.Equal(["c"], s.Tabs[1].Items);
+        s.Active = 9;
+        Assert.Same(s.Tabs[2], s.Current); // clamped
+    }
 }

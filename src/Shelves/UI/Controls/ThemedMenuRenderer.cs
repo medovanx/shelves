@@ -30,7 +30,9 @@ sealed class ThemedMenuRenderer(Theme t) : ToolStripRenderer
             d.Font = new Font("Segoe UI", 9.5f);
             d.BackColor = theme.Surface;
             if (d is ToolStripDropDownMenu dm) dm.ImageScalingSize = new Size((int)(16 * s), (int)(16 * s));
-            d.Opened += (_, _) => Native.RoundCorners(d.Handle, theme.Dark);
+            // No shadow: neither the menu's own drop shadow nor the one Windows 11 adds to rounded popups.
+            d.DropShadowEnabled = false;
+            d.Opened += (_, _) => Native.RoundCornersNoShadow(d.Handle, theme.Dark);
             foreach (ToolStripItem it in d.Items)
             {
                 if (it is ToolStripSeparator) continue;

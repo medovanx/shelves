@@ -59,6 +59,7 @@ sealed partial class ShelfWindow
         hot = false;
         hoverItem = null;
         hotPortal = false;
+        hoverTab = -1;
         Apply();
     }
 
@@ -79,6 +80,9 @@ sealed partial class ShelfWindow
         var edges = EdgesAt(e.Location);
         if (edges != Edges.None) { drag = DragKind.Resize; resizeEdges = edges; Capture = true; return; }
         if (InTitle(e.Location)) { drag = DragKind.TitlePending; Capture = true; return; }
+        int tab = TabAt(e.Location);
+        if (tab == -2) { AddTab(); return; }
+        if (tab >= 0) { SelectTab(tab); return; }
 
         var it = ItemAt(e.Location);
         if (it != null)
@@ -157,7 +161,8 @@ sealed partial class ShelfWindow
         Cursor = edges != Edges.None ? CursorFor(edges) : Cursors.Default;
         var h = ItemAt(e.Location);
         bool hp = portalButton is { } pb && pb.Contains(e.Location);
-        if (h != hoverItem || hp != hotPortal) { hoverItem = h; hotPortal = hp; Apply(); }
+        int ht = TabAt(e.Location);
+        if (h != hoverItem || hp != hotPortal || ht != hoverTab) { hoverItem = h; hotPortal = hp; hoverTab = ht; Apply(); }
     }
 
     protected override void OnMouseUp(MouseEventArgs e)
@@ -191,6 +196,11 @@ sealed partial class ShelfWindow
                 Apply();
                 break;
         }
+        if (e.Button == MouseButtons.Right && TabAt(e.Location) is var rt and >= 0)
+        {
+            ShowTabMenu(rt, Cursor.Position);
+            return;
+        }
         if (e.Button == MouseButtons.Right)
         {
             if (InTitle(e.Location) || ItemAt(e.Location) is not { } it)
@@ -212,6 +222,7 @@ sealed partial class ShelfWindow
         base.OnMouseDoubleClick(e);
         if (e.Button != MouseButtons.Left) return;
         if (InTitle(e.Location)) { SetRolled(!Model.Rolled); return; }
+        if (TabAt(e.Location) is var t and >= 0) { BeginTabRename(t); return; }
         if (ItemAt(e.Location) is { } it) OpenItem(it);
     }
 
@@ -345,6 +356,7 @@ sealed partial class ShelfWindow
     protected override void OnDragOver(DragEventArgs e)
     {
         base.OnDragOver(e);
+        DragOverTabs(PointToClient(new Point(e.X, e.Y)));
         e.Effect = EffectFor(e);
         var p = new Native.POINT { X = e.X, Y = e.Y };
         helper?.DragOver(ref p, (int)e.Effect);
@@ -355,6 +367,7 @@ sealed partial class ShelfWindow
         base.OnDragLeave(e);
         helper?.DragLeave();
         dropHover = false;
+        dragTab = -1;
         Apply();
     }
 
@@ -384,8 +397,13 @@ sealed partial class ShelfWindow
         var p = new Native.POINT { X = e.X, Y = e.Y };
         if (e.Data is ComDataObject cd) helper?.Drop(cd, ref p, (int)effect);
         dropHover = false;
+        dragTab = -1;
         var names = dropNames.ToList();
-        int index = DropIndex(PointToClient(new Point(e.X, e.Y)));
+        var client = PointToClient(new Point(e.X, e.Y));
+        // Dropped on a tab: into that tab, at its end.
+        int onTab = TabAt(client);
+        if (onTab >= 0 && onTab != Model.Active) SelectTab(onTab);
+        int index = onTab >= 0 ? -1 : DropIndex(client);
         // Shelving needs no file work; moving and copying files run after the drop returns, so the source
         // (often Explorer) is not held up, and report no effect so the source never deletes anything itself.
         e.Effect = effect == DragDropEffects.Link ? DragDropEffects.Link : DragDropEffects.None;

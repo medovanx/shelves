@@ -50,6 +50,7 @@ sealed partial class ShelfWindow
             m.Items.Add(Item(L.T("StopPortal"), Art.IconFolder, () => { Model.Portal = null; watcher?.Dispose(); watcher = null; app.SaveSoon(); LoadItems(); }));
         }
         m.Items.Add(new ToolStripSeparator());
+        m.Items.Add(Item(L.T("NewTab"), Art.IconAdd, AddTab));
         m.Items.Add(Item(L.T("NewShelf"), Art.IconAdd, () => app.NewShelfNear(this)));
         var del = Item(L.T("DeleteShelf"), Art.IconDelete, () => app.DeleteShelf(this));
         del.ForeColor = Color.FromArgb(232, 72, 85);

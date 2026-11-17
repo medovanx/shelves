@@ -10,6 +10,27 @@ static class Program
             ApplicationConfiguration.Initialize();
             return Shots.Run(args[1]);
         }
+        if (args.Length > 1 && args[0] == "--menu-shot")
+        {
+            // A themed menu at a fixed spot, captured with a margin around it to check its edges (local check only).
+            ApplicationConfiguration.Initialize();
+            var m = new ContextMenuStrip { AutoClose = false };
+            foreach (var t in new[] { "Rename", "Roll up", "Dock", "Sort by" }) m.Items.Add(t);
+            ThemedMenuRenderer.Style(m, Theme.Current);
+            var host = new Form { ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(220, 220), Size = new Size(400, 300), TopMost = true, FormBorderStyle = FormBorderStyle.None, BackColor = Color.White };
+            host.Shown += async (_, _) =>
+            {
+                m.Show(new Point(300, 300));
+                await Task.Delay(800);
+                using var bmp = new Bitmap(m.Width + 80, m.Height + 80);
+                using (var g = Graphics.FromImage(bmp)) g.CopyFromScreen(260, 260, 0, 0, bmp.Size);
+                bmp.Save(args[1]);
+                m.Close();
+                host.Close();
+            };
+            Application.Run(host);
+            return 0;
+        }
         if (args.Length > 1 && args[0] == "--compose")
         {
             ApplicationConfiguration.Initialize();
