@@ -300,6 +300,37 @@ sealed partial class ShelvesApp
     /// <summary>Shown after the mouse draws a box on the desktop with the right button.</summary>
     public void OfferNewShelf(Rectangle r, Point at) => OnBoxDrawn(r, at);
 
+    /// <summary>Where each visible (not shelved) desktop icon is now, by name.</summary>
+    public Dictionary<string, Pt> VisiblePositions()
+    {
+        var shelved = new HashSet<string>(Layout.AllShelved(), StringComparer.OrdinalIgnoreCase);
+        return View.Items().Where(i => !DesktopView.IsParked(i.Pos) && !shelved.Contains(i.Name))
+            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Pos, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>For a while, puts back any of these icons that Explorer moves (it reloads its list on Refresh).</summary>
+    public void KeepPositions(Dictionary<string, Pt> positions, int ms)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var t = new System.Windows.Forms.Timer { Interval = 150 };
+        t.Tick += (_, _) =>
+        {
+            if (sw.ElapsedMilliseconds > ms || !View.Attached) { t.Stop(); t.Dispose(); return; }
+            bool moved = false;
+            var shelved = new HashSet<string>(Layout.AllShelved(), StringComparer.OrdinalIgnoreCase);
+            foreach (var it in View.Items())
+            {
+                // Not one of them, already in place, or shelved since (the shelf hides it).
+                if (!positions.TryGetValue(it.Name, out var want) || it.Pos == want || shelved.Contains(it.Name)) continue;
+                View.Move(it.Index, want);
+                moved = true;
+            }
+            if (moved) { View.SaveState(); ReloadLayers(); }
+        };
+        t.Start();
+    }
+
     /// <summary>The setting changed (tray menu or settings).</summary>
     public void SetDrawDesktop(bool on)
     {

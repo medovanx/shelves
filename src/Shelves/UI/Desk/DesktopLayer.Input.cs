@@ -332,7 +332,12 @@ sealed partial class DesktopLayer
     {
         app.NoteDesktopPoint(screen);
         var before = app.DesktopNames();
-        ShellOps.BackgroundMenu(Handle, app.View, screen, (ModifierKeys & Keys.Shift) != 0);
+        var positions = app.VisiblePositions();
+        ShellOps.BackgroundMenu(Handle, app.View, screen, (ModifierKeys & Keys.Shift) != 0, out bool topLevel);
+        // Refresh (and the other plain commands) makes Explorer reload its list, and it brings every hidden
+        // shelved icon back for a moment, bumping the others aside. Only Sort by and View (submenus) arrange icons
+        // on purpose; after anything else every icon goes back where it was.
+        if (topLevel) app.KeepPositions(positions, 5000);
         // New folder, New text document, Paste: the new items go where the menu was opened, and a new one
         // Explorer wants named gets our own name box (Explorer's would be in its hidden list). The menu stays open
         // as long as the user likes, so this watches for a while.

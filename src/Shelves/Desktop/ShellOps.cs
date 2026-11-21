@@ -111,18 +111,25 @@ static class ShellOps
     {
         Guid iid = Shell32.IID_IContextMenu;
         items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
-        return RunMenu(hwnd, obj, screen, 0x10 /* CMF_CANRENAME */ | (extended ? 0x100u /* CMF_EXTENDEDVERBS */ : 0));
+        return RunMenu(hwnd, obj, screen, 0x10 /* CMF_CANRENAME */ | (extended ? 0x100u /* CMF_EXTENDEDVERBS */ : 0), out _, out _);
     }
 
     /// <summary>
     /// The desktop's own background menu (View, Sort by, Refresh, Paste, New, Display settings, Personalize and
     /// any entries added to it), taken from Explorer's desktop view and shown at a screen point. Returns the verb run.
     /// </summary>
-    public static string? BackgroundMenu(IntPtr hwnd, DesktopView view, Point screen, bool extended)
+    public static string? BackgroundMenu(IntPtr hwnd, DesktopView view, Point screen, bool extended, out bool topLevel)
     {
+        topLevel = false;
         if (view.ShellView is not { } sv) return null;
         Guid iid = Shell32.IID_IContextMenu;
-        try { sv.GetItemObject(0 /* SVGIO_BACKGROUND */, ref iid, out var obj); return RunMenu(hwnd, obj, screen, extended ? 0x100u : 0); }
+        try
+        {
+            sv.GetItemObject(0 /* SVGIO_BACKGROUND */, ref iid, out var obj);
+            var verb = RunMenu(hwnd, obj, screen, extended ? 0x100u : 0, out int cmd, out var top);
+            topLevel = cmd > 0 && top.Contains(cmd);
+            return verb;
+        }
         catch (Exception ex) when (ex is COMException or InvalidCastException) { Log.Error(ex); return null; }
     }
 
@@ -139,8 +146,11 @@ static class ShellOps
         catch (Exception ex) when (ex is COMException or InvalidCastException) { Log.Error(ex); }
     }
 
-    static string? RunMenu(IntPtr hwnd, object obj, Point screen, uint flags)
+    /// <summary>Shows a shell menu and runs the choice; <paramref name="cmd"/> is the chosen id, <paramref name="topLevel"/> the ids not in a submenu.</summary>
+    static string? RunMenu(IntPtr hwnd, object obj, Point screen, uint flags, out int cmd, out HashSet<int> topLevel)
     {
+        cmd = 0;
+        topLevel = [];
         var cm = (IContextMenu)obj;
         menu2 = obj as IContextMenu2;
         menu3 = obj as IContextMenu3;
@@ -150,7 +160,8 @@ static class ShellOps
             const uint first = 1, last = 0x7FFF;
             if (cm.QueryContextMenu(hmenu, 0, first, last, flags) < 0) return null;
             FixMenuBitmaps(hmenu, deep: true);
-            int cmd = Shell32.TrackPopupMenuEx(hmenu, 0x100 /* TPM_RETURNCMD */ | 0x2 /* TPM_RIGHTBUTTON */, screen.X, screen.Y, hwnd, IntPtr.Zero);
+            for (int i = 0; i < GetMenuItemCount(hmenu); i++) topLevel.Add((int)GetMenuItemID(hmenu, i));
+            cmd = Shell32.TrackPopupMenuEx(hmenu, 0x100 /* TPM_RETURNCMD */ | 0x2 /* TPM_RIGHTBUTTON */, screen.X, screen.Y, hwnd, IntPtr.Zero);
             if (cmd <= 0) return null;
             string? verb = Verb(cm, (uint)(cmd - first));
             if (verb is "rename") return verb;
@@ -553,6 +564,7 @@ static class ShellOps
     }
 
     [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr m);
+    [DllImport("user32.dll")] static extern uint GetMenuItemID(IntPtr m, int pos);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMenuItemInfo(IntPtr m, uint item, bool byPos, ref MENUITEMINFO mii);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SetMenuItemInfo(IntPtr m, uint item, bool byPos, ref MENUITEMINFO mii);
     [DllImport("gdi32.dll")] static extern int GetDIBits(IntPtr dc, IntPtr bmp, uint start, uint lines, IntPtr bits, ref Shell32.BITMAPINFOHEADER bi, uint usage);
