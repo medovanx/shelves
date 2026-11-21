@@ -364,6 +364,40 @@ sealed partial class DesktopLayer : Form
         }
     }
 
+    /// <summary>
+    /// The picture that follows the mouse while icons are dragged: each dragged icon on this monitor with its label,
+    /// faded, laid out as they sit now, with the press point as the spot under the mouse.
+    /// </summary>
+    DragGhost? GhostOf(List<string> names, Point pressScreen)
+    {
+        var set = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var list = icons.Where(i => set.Contains(i.Name)).ToList();
+        if (list.Count == 0) return null;
+        var bounds = list.Select(DrawnArea).Aggregate(Rectangle.Union);
+        bounds.Intersect(new Rectangle(0, 0, Screen.Bounds.Width, Screen.Bounds.Height));
+        if (bounds.Width <= 0 || bounds.Height <= 0) return null;
+        var bmp = new Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+        using (var layer = new Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format32bppPArgb))
+        {
+            using (var g = Graphics.FromImage(layer))
+            {
+                g.TranslateTransform(-bounds.X, -bounds.Y);
+                var saved = icons;
+                var savedHover = hoverName;
+                icons = list;
+                hoverName = null;
+                try { Paint(g, new Rectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height)); }
+                finally { icons = saved; hoverName = savedHover; }
+            }
+            using var g2 = Graphics.FromImage(bmp);
+            using var ia = new System.Drawing.Imaging.ImageAttributes();
+            ia.SetColorMatrix(new System.Drawing.Imaging.ColorMatrix { Matrix33 = 0.75f });
+            g2.DrawImage(layer, new Rectangle(0, 0, bounds.Width, bounds.Height), 0, 0, bounds.Width, bounds.Height, GraphicsUnit.Pixel, ia);
+        }
+        var press = ToClient(pressScreen);
+        return new DragGhost(bmp, new Point(press.X - bounds.X, press.Y - bounds.Y));
+    }
+
     static void DrawFaded(Graphics g, Bitmap icon, RectangleF dr)
     {
         using var ia = new System.Drawing.Imaging.ImageAttributes();

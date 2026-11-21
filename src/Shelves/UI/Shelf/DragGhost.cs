@@ -11,6 +11,17 @@ sealed class DragGhost : Form
     readonly Bitmap image;
     readonly Point hotspot;
 
+    /// <summary>A ready picture, with the point of it that sits under the mouse.</summary>
+    public DragGhost(Bitmap picture, Point hotspot)
+    {
+        FormBorderStyle = FormBorderStyle.None;
+        ShowInTaskbar = false;
+        StartPosition = FormStartPosition.Manual;
+        TopMost = true;
+        image = picture;
+        this.hotspot = hotspot;
+    }
+
     public DragGhost(IReadOnlyList<string> names, int px, float s)
     {
         FormBorderStyle = FormBorderStyle.None;
