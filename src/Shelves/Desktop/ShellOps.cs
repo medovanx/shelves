@@ -82,6 +82,15 @@ static class ShellOps
     {
         if (m.Msg is not (0x117 /* WM_INITMENUPOPUP */ or 0x2B /* WM_DRAWITEM */ or 0x2C /* WM_MEASUREITEM */ or 0x120 /* WM_MENUCHAR */))
             return false;
+        if (m.Msg == 0x117 && (menu2 != null || menu3 != null))
+        {
+            // A submenu (New, Send to) fills in now: let the handler fill it, then fix its icons too.
+            bool handled = menu3 != null ? menu3.HandleMenuMsg2((uint)m.Msg, m.WParam, m.LParam, out _) == 0
+                                         : menu2!.HandleMenuMsg((uint)m.Msg, m.WParam, m.LParam) == 0;
+            FixMenuBitmaps(m.WParam, deep: false);
+            m.Result = IntPtr.Zero;
+            return handled;
+        }
         if (menu3 != null)
         {
             if (menu3.HandleMenuMsg2((uint)m.Msg, m.WParam, m.LParam, out var r) == 0) { m.Result = r; return true; }
@@ -140,6 +149,7 @@ static class ShellOps
         {
             const uint first = 1, last = 0x7FFF;
             if (cm.QueryContextMenu(hmenu, 0, first, last, flags) < 0) return null;
+            FixMenuBitmaps(hmenu, deep: true);
             int cmd = Shell32.TrackPopupMenuEx(hmenu, 0x100 /* TPM_RETURNCMD */ | 0x2 /* TPM_RIGHTBUTTON */, screen.X, screen.Y, hwnd, IntPtr.Zero);
             if (cmd <= 0) return null;
             string? verb = Verb(cm, (uint)(cmd - first));
@@ -160,10 +170,90 @@ static class ShellOps
         finally
         {
             Shell32.DestroyMenu(hmenu);
+            foreach (var b in menuBitmaps) Native.DeleteObject(b);
+            menuBitmaps.Clear();
             menu2 = null; menu3 = null;
             Marshal.ReleaseComObject(cm);
         }
     }
+
+    static readonly List<IntPtr> menuBitmaps = [];
+
+    /// <summary>
+    /// Menu icons made in Explorer (the desktop's background menu comes from there) lose their transparency when
+    /// the menu is shown by another program, and draw on black. Each is copied into a bitmap of our own with its
+    /// alpha kept, which menus draw properly.
+    /// </summary>
+    static unsafe void FixMenuBitmaps(IntPtr hmenu, bool deep)
+    {
+        int n = GetMenuItemCount(hmenu);
+        for (int i = 0; i < n; i++)
+        {
+            var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 /* MIIM_BITMAP */ | 0x4 /* MIIM_SUBMENU */ };
+            if (!GetMenuItemInfo(hmenu, (uint)i, true, ref mii)) continue;
+            if (deep && mii.hSubMenu != IntPtr.Zero) FixMenuBitmaps(mii.hSubMenu, true);
+            // Small values are the system's own glyphs (HBMMENU_*), not bitmaps.
+            if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
+            if (menuBitmaps.Contains(mii.hbmpItem)) continue;
+            var copy = AlphaCopy(mii.hbmpItem);
+            if (copy == IntPtr.Zero) continue;
+            menuBitmaps.Add(copy);
+            var set = new MENUITEMINFO { cbSize = mii.cbSize, fMask = 0x80, hbmpItem = copy };
+            SetMenuItemInfo(hmenu, (uint)i, true, ref set);
+        }
+    }
+
+    /// <summary>A premultiplied 32-bit copy of a bitmap, or zero when it has no alpha to keep.</summary>
+    static unsafe IntPtr AlphaCopy(IntPtr hbmp)
+    {
+        if (Shell32.GetObject(hbmp, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0) return IntPtr.Zero;
+        int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight;
+        if (w <= 0 || h <= 0 || w > 256 || h > 256) return IntPtr.Zero;
+        var pixels = new uint[w * h];
+        var bi = new Shell32.BITMAPINFOHEADER { biSize = (uint)Marshal.SizeOf<Shell32.BITMAPINFOHEADER>(), biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
+        var screen = Native.GetDC(IntPtr.Zero);
+        try
+        {
+            fixed (uint* p = pixels)
+                if (GetDIBits(screen, hbmp, 0, (uint)h, (IntPtr)p, ref bi, 0) == 0) return IntPtr.Zero;
+        }
+        finally { Native.ReleaseDC(IntPtr.Zero, screen); }
+        bool alpha = false, straight = false;
+        foreach (var px in pixels)
+        {
+            uint a = px >> 24;
+            if (a != 0) alpha = true;
+            if (((px >> 16) & 255) > a || ((px >> 8) & 255) > a || (px & 255) > a) straight = true;
+        }
+        if (!alpha) return IntPtr.Zero;
+        if (straight)
+            for (int k = 0; k < pixels.Length; k++)
+            {
+                uint px = pixels[k], a = px >> 24;
+                uint r = ((px >> 16) & 255) * a / 255, g = ((px >> 8) & 255) * a / 255, b = (px & 255) * a / 255;
+                pixels[k] = (a << 24) | (r << 16) | (g << 8) | b;
+            }
+        var bi2 = bi;
+        var dib = CreateDIBSection(IntPtr.Zero, ref bi2, 0, out var bits, IntPtr.Zero, 0);
+        if (dib == IntPtr.Zero) return IntPtr.Zero;
+        fixed (uint* src = pixels) Buffer.MemoryCopy(src, (void*)bits, pixels.Length * 4L, pixels.Length * 4L);
+        return dib;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct MENUITEMINFO
+    {
+        public uint cbSize, fMask, fType, fState, wID;
+        public IntPtr hSubMenu, hbmpChecked, hbmpUnchecked, dwItemData, dwTypeData;
+        public uint cch;
+        public IntPtr hbmpItem;
+    }
+
+    [DllImport("user32.dll")] static extern int GetMenuItemCount(IntPtr m);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool GetMenuItemInfo(IntPtr m, uint item, bool byPos, ref MENUITEMINFO mii);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern bool SetMenuItemInfo(IntPtr m, uint item, bool byPos, ref MENUITEMINFO mii);
+    [DllImport("gdi32.dll")] static extern int GetDIBits(IntPtr dc, IntPtr bmp, uint start, uint lines, IntPtr bits, ref Shell32.BITMAPINFOHEADER bi, uint usage);
+    [DllImport("gdi32.dll")] static extern IntPtr CreateDIBSection(IntPtr dc, ref Shell32.BITMAPINFOHEADER bi, uint usage, out IntPtr bits, IntPtr section, uint offset);
 
     /// <summary>Runs one verb ("delete", "properties", ...) on the items without showing a menu.</summary>
     public static void Invoke(IntPtr hwnd, ItemGroup items, string verb, bool shift = false)

@@ -271,14 +271,14 @@ sealed partial class ShelvesApp
     /// on its own time, so this watches for them for a few seconds. A new one Explorer wants a name for gets our
     /// name box, since Explorer's own one would open in its hidden list.
     /// </summary>
-    public void PlaceNew(HashSet<string> before, Point screen, bool rename)
+    public void PlaceNew(HashSet<string> before, Point screen, bool rename, int waitMs = 4000)
     {
         CutNames.Clear();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var t = new System.Windows.Forms.Timer { Interval = 120 };
         t.Tick += (_, _) =>
         {
-            if (sw.ElapsedMilliseconds > 4000 || !View.Attached) { t.Stop(); t.Dispose(); ReloadLayers(); return; }
+            if (sw.ElapsedMilliseconds > waitMs || !View.Attached) { t.Stop(); t.Dispose(); ReloadLayers(); return; }
             var added = DesktopNames().Where(n => !before.Contains(n)).ToList();
             if (added.Count == 0) return;
             t.Stop();

@@ -331,8 +331,9 @@ sealed partial class DesktopLayer
         var before = app.DesktopNames();
         ShellOps.BackgroundMenu(Handle, app.View, screen, (ModifierKeys & Keys.Shift) != 0);
         // New folder, New text document, Paste: the new items go where the menu was opened, and a new one
-        // Explorer wants named gets our own name box (Explorer's would be in its hidden list).
-        app.PlaceNew(before, screen, rename: true);
+        // Explorer wants named gets our own name box (Explorer's would be in its hidden list). The menu stays open
+        // as long as the user likes, so this watches for a while.
+        app.PlaceNew(before, screen, rename: true, waitMs: 30000);
     }
 
     // ---- Keys ----------------------------------------------------------------------------------------------------
