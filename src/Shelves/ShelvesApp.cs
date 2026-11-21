@@ -431,7 +431,10 @@ sealed partial class ShelvesApp : ApplicationContext
         ReloadLayers();
     }
 
-    void OnBoxDrawn(Rectangle r, Point at)
+    void OnBoxDrawn(Rectangle r, Point at) => OnBoxDrawn(r, at, null);
+
+    /// <summary>The menu after a box is drawn; <paramref name="closed"/> runs when it closes (the box can go then).</summary>
+    void OnBoxDrawn(Rectangle r, Point at, Action? closed)
     {
         var m = new ContextMenuStrip { RightToLeft = L.Ar ? RightToLeft.Yes : RightToLeft.No };
         var create = new ToolStripMenuItem(L.T("CreateShelfHere")) { Tag = new ThemedMenuRenderer.MenuGlyph(Art.IconAdd) };
@@ -439,7 +442,7 @@ sealed partial class ShelvesApp : ApplicationContext
         m.Items.Add(create);
         m.Items.Add(new ToolStripMenuItem(L.T("Cancel")));
         ThemedMenuRenderer.Style(m, Theme);
-        m.Closed += (_, _) => messages.Invoker.BeginInvoke(() => m.Dispose());
+        m.Closed += (_, _) => messages.Invoker.BeginInvoke(() => { m.Dispose(); closed?.Invoke(); });
         m.Show(at);
     }
 

@@ -316,7 +316,15 @@ sealed partial class ShelvesApp
     }
 
     /// <summary>Shown after the mouse draws a box on the desktop with the right button.</summary>
-    public void OfferNewShelf(Rectangle r, Point at) => OnBoxDrawn(r, at);
+    public void OfferNewShelf(Rectangle r, Point at, Action closed) => OnBoxDrawn(r, at, closed);
+
+    /// <summary>A copy is about to happen (Ctrl+C): cut icons look normal again at once, not when the copy lands.</summary>
+    public void ClearCut()
+    {
+        if (CutNames.Count == 0) return;
+        CutNames.Clear();
+        foreach (var l in Layers) l.RenderAll();
+    }
 
     /// <summary>Where each visible (not shelved) desktop icon is now, by name.</summary>
     /// <summary>Positions being kept after a desktop-menu command (see <see cref="KeepPositions"/>), or null.</summary>

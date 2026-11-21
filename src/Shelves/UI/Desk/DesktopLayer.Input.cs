@@ -189,11 +189,15 @@ sealed partial class DesktopLayer
             {
                 if (newShelfBox is { } nb)
                 {
-                    InvalidateRect(Rectangle.Inflate(nb, 4, 4));
-                    newShelfBox = null;
-                    Render();
+                    // The box stays while its menu is open, and goes when the menu closes (made or cancelled).
                     var r = new Rectangle(nb.X + Screen.Bounds.X, nb.Y + Screen.Bounds.Y, nb.Width, nb.Height);
-                    app.OfferNewShelf(r, at);
+                    app.OfferNewShelf(r, at, () =>
+                    {
+                        if (newShelfBox is not { } box) return;
+                        InvalidateRect(Rectangle.Inflate(box, 4, 4));
+                        newShelfBox = null;
+                        Render();
+                    });
                 }
                 return;
             }
@@ -325,6 +329,7 @@ sealed partial class DesktopLayer
         string? verb = ShellOps.ContextMenu(Handle, group, screen, (ModifierKeys & Keys.Shift) != 0);
         if (verb == "rename" && names.Count == 1) BeginRename(names[0]);
         if (verb is "cut") app.MarkCut(names);
+        else if (verb is "copy") app.ClearCut();
         app.CheckSoon();
     }
 
@@ -370,11 +375,13 @@ sealed partial class DesktopLayer
                 foreach (var l in app.Layers) l.SelectAll();
                 break;
             case Keys.C when e.Control:
+                app.ClearCut();
                 Verb(names, "copy", false);
                 break;
             case Keys.X when e.Control:
-                Verb(names, "cut", false);
+                // Faded at once; Windows' cut command takes a moment to come back.
                 app.MarkCut(names);
+                Verb(names, "cut", false);
                 break;
             case Keys.V when e.Control:
             {
