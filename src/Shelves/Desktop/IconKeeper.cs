@@ -13,6 +13,11 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     public event Action<IReadOnlyList<DesktopItem>>? Synced;
 
     int lastCount = -1, lastParked = -1;
+    /// <summary>The shelved icons' list-view indices at the last full sync, with their off-screen spots.</summary>
+    Dictionary<int, Pt> slotByIndex = [];
+    /// <summary>Set when icons were re-hidden by index (fast path); a full sync confirms by name soon after.</summary>
+    public bool NeedsConfirm { get; private set; }
+    string lastNames = "";
 
     /// <summary>While true (an icon drag is running), checks do nothing, so Explorer's drop is not undone mid-way.</summary>
     public bool Paused { get; set; }
@@ -27,6 +32,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var items = view.Items();
         bool homes = false;
         int parked = 0, slot = 0;
+        var slots = new Dictionary<int, Pt>();
         // Spots taken by icons that stay visible, so a returning icon never lands on top of one.
         var taken = items.Where(i => !shelved.Contains(i.Name) && !DesktopView.IsParked(i.Pos)).Select(i => i.Pos).ToList();
         foreach (var it in items)
@@ -41,6 +47,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
                     if (l.Home.TryAdd(it.Name, it.Pos)) homes = true;
                     view.Move(it.Index, DesktopView.ParkSlot(slot, view.Spacing));
                 }
+                slots[it.Index] = DesktopView.ParkSlot(slot, view.Spacing);
                 slot++;
                 parked++;
             }
@@ -56,9 +63,17 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         }
         lastCount = view.Count;
         lastParked = parked;
+        slotByIndex = slots;
+        NeedsConfirm = false;
         if (homes) HomesChanged?.Invoke();
         Last = view.Items();
-        Synced?.Invoke(Last);
+        // Shelves only need redrawing when the set of desktop items changed, not when icons merely moved.
+        string names = string.Join("|", Last.Select(i => i.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase));
+        if (names != lastNames)
+        {
+            lastNames = names;
+            Synced?.Invoke(Last);
+        }
         return Last;
     }
 
@@ -73,8 +88,17 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var positions = view.Positions();
         int parked = positions.Count(DesktopView.IsParked);
         if (count == lastCount && parked == lastParked) return false;
-        // Always a full sync, which finds icons by name: list-view indices shift when files come and go, so
-        // re-parking by a remembered index could hide the wrong icon (the one just dragged, say).
+        // Explorer pulled hidden icons on screen (it does on every drop) but no file came or went, so the list-view
+        // indices from the last sync still hold: queue the moves straight back without waiting on Explorer. A full
+        // sync by name follows once things settle (NeedsConfirm), in case the indices were reordered (a sort).
+        if (count == lastCount && parked < lastParked && slotByIndex.Count > 0)
+        {
+            foreach (var (i, spot) in slotByIndex)
+                if (i < positions.Length && !DesktopView.IsParked(positions[i])) view.PostMove(i, spot);
+            NeedsConfirm = true;
+            return true;
+        }
+        // Files came or went: indices may have shifted, so find icons by name.
         Sync();
         return true;
     }

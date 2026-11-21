@@ -192,6 +192,16 @@ sealed class DesktopView : IDisposable
         return res;
     }
 
+    /// <summary>
+    /// Like <see cref="Move"/> but does not wait for Explorer: the move is queued and applied as soon as Explorer's
+    /// thread is free (while it handles a drop it answers nothing, so waiting on each move costs hundreds of ms).
+    /// </summary>
+    public void PostMove(int index, Pt p)
+    {
+        if (ListView != IntPtr.Zero)
+            Native.PostMessage(ListView, 0x100F /* LVM_SETITEMPOSITION */, (IntPtr)index, (IntPtr)(((p.Y & 0xFFFF) << 16) | (p.X & 0xFFFF)));
+    }
+
     public void Move(int index, Pt p) =>
         Send(0x100F /* LVM_SETITEMPOSITION */, index, (IntPtr)(((p.Y & 0xFFFF) << 16) | (p.X & 0xFFFF)));
 

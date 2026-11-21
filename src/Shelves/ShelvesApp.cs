@@ -187,6 +187,8 @@ sealed class ShelvesApp : ApplicationContext
                 t.Stop();
                 t.Dispose();
                 if (frozen) Thaw(lv);
+                // Re-hidden by index during the drop: confirm by name now that Explorer is idle.
+                if (Keeper.NeedsConfirm) Keeper.Sync();
                 if (!restored)
                 {
                     // Only an icon drag carries icons; a selection box or a click moves nothing to put back.
