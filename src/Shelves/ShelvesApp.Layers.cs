@@ -89,6 +89,10 @@ sealed partial class ShelvesApp
         if (!LayerMode || Layers.Count == 0) return;
         if (full) { Keeper.Sync(); dropTargets.Clear(); }
         var items = View.Items();
+        // Icons Explorer just bumped and that are about to go back (KeepPositions): keep showing the old picture
+        // rather than flash them at the wrong spots.
+        if (kept is { } k && items.Any(i => k.TryGetValue(i.Name, out var want) && i.Pos != want && !DesktopView.IsParked(i.Pos)))
+            return;
         layerPositions = View.Positions();
         var shelved = new HashSet<string>(Layout.AllShelved(), StringComparer.OrdinalIgnoreCase);
         var visible = items.Where(i => !DesktopView.IsParked(i.Pos) && !shelved.Contains(i.Name)).ToList();
@@ -301,6 +305,9 @@ sealed partial class ShelvesApp
     public void OfferNewShelf(Rectangle r, Point at) => OnBoxDrawn(r, at);
 
     /// <summary>Where each visible (not shelved) desktop icon is now, by name.</summary>
+    /// <summary>Positions being kept after a desktop-menu command (see <see cref="KeepPositions"/>), or null.</summary>
+    Dictionary<string, Pt>? kept;
+
     public Dictionary<string, Pt> VisiblePositions()
     {
         var shelved = new HashSet<string>(Layout.AllShelved(), StringComparer.OrdinalIgnoreCase);
@@ -313,10 +320,17 @@ sealed partial class ShelvesApp
     public void KeepPositions(Dictionary<string, Pt> positions, int ms)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var t = new System.Windows.Forms.Timer { Interval = 150 };
+        var t = new System.Windows.Forms.Timer { Interval = 40 };
+        kept = positions;
         t.Tick += (_, _) =>
         {
-            if (sw.ElapsedMilliseconds > ms || !View.Attached) { t.Stop(); t.Dispose(); return; }
+            if (sw.ElapsedMilliseconds > ms || !View.Attached)
+            {
+                t.Stop(); t.Dispose();
+                if (kept == positions) kept = null;
+                ReloadLayers();
+                return;
+            }
             bool moved = false;
             var shelved = new HashSet<string>(Layout.AllShelved(), StringComparer.OrdinalIgnoreCase);
             foreach (var it in View.Items())
