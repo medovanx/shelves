@@ -95,6 +95,7 @@ static class Program
         }
 
         ApplicationConfiguration.Initialize();
+        Native.FollowDarkMode();
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         ShelvesApp? app = null;
         Application.ThreadException += (_, e) => Log.Error(e.Exception);

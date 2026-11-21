@@ -184,4 +184,28 @@ static class Native
             ReleaseDC(IntPtr.Zero, screen);
         }
     }
+
+    /// <summary>
+    /// Lets Windows' own menus in this program (the shell's right-click menus, the desktop's menu) follow dark mode,
+    /// as Explorer's do. Uses uxtheme's unnamed exports that Explorer and other Windows apps use; on a Windows
+    /// without them nothing changes.
+    /// </summary>
+    public static void FollowDarkMode()
+    {
+        try
+        {
+            SetPreferredAppMode(1 /* AllowDark: follow the system setting */);
+            FlushMenuThemes();
+        }
+        catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException) { }
+    }
+
+    /// <summary>The system switched between light and dark: menus made after this follow.</summary>
+    public static void RefreshDarkMode()
+    {
+        try { FlushMenuThemes(); } catch (Exception ex) when (ex is EntryPointNotFoundException or DllNotFoundException) { }
+    }
+
+    [DllImport("uxtheme.dll", EntryPoint = "#135")] static extern int SetPreferredAppMode(int mode);
+    [DllImport("uxtheme.dll", EntryPoint = "#136")] static extern void FlushMenuThemes();
 }

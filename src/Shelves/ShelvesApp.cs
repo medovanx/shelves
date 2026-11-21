@@ -529,6 +529,7 @@ sealed partial class ShelvesApp : ApplicationContext
         if (c is UserPreferenceCategory.General or UserPreferenceCategory.Color or UserPreferenceCategory.VisualStyle or UserPreferenceCategory.Desktop)
         {
             Theme = Theme.Current;
+            Native.RefreshDarkMode();
             LabelShadows = Native.LabelShadows();
             Wallpaper.Reset();
         }
