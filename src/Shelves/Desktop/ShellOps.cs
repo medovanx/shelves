@@ -209,12 +209,7 @@ static class ShellOps
             if (sm.hSubMenu == IntPtr.Zero) continue;
             if (obj is IContextMenu3 c3) c3.HandleMenuMsg2(0x117, sm.hSubMenu, (IntPtr)i, out _);
             else if (obj is IContextMenu2 c2) c2.HandleMenuMsg(0x117, sm.hSubMenu, (IntPtr)i);
-            var t0 = System.Diagnostics.Stopwatch.StartNew();
             FixMenuBitmaps(sm.hSubMenu, deep: false);
-            long first = t0.ElapsedMilliseconds;
-            t0.Restart();
-            FixMenuBitmaps(sm.hSubMenu, deep: false);
-            File.AppendAllText(Path.Combine(dir, "items.txt"), $"sub{i} fix {first} ms, again {t0.ElapsedMilliseconds} ms" + Environment.NewLine);
             Dump(sm.hSubMenu, $"sub{i}-");
         }
         Shell32.DestroyMenu(hmenu);
@@ -225,7 +220,6 @@ static class ShellOps
         {
             var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 | 0x100 /* FTYPE */ | 0x20 /* DATA */ };
             GetMenuItemInfo(menu, (uint)i, true, ref mii);
-            File.AppendAllText(Path.Combine(dir, "items.txt"), $"{prefix}{i} hbmp={(long)mii.hbmpItem} type=0x{mii.fType:X} data={(long)mii.dwItemData}" + Environment.NewLine);
             if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
             if (Shell32.GetObject(mii.hbmpItem, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0 || ds.dsBm.bmBits == IntPtr.Zero) continue;
             int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight;

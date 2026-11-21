@@ -157,7 +157,6 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         visibleBefore = null;
         // Only the snapshot taken when this very drag began: one left from an earlier press would move icons by
         // the wrong amount.
-        Shelves.Services.Log.Note($"[diag] restore press={press} release={release} snap={(snap == null ? "none" : snap.Press.ToString())}");
         if (snap == null || snap.Press != press || !view.Attached || Paused) return 0;
         var before = snap.Pos;
         var shelved = ShelvedNames();
@@ -178,7 +177,6 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
                 // Explorer's shuffle nudges a dropped icon a cell or so at most. Anything further means the
                 // snapshot does not fit what happened: leave the icon where Explorer dropped it.
                 if (Math.Abs(target.X - it.Pos.X) > 2 * sp.Width || Math.Abs(target.Y - it.Pos.Y) > 2 * sp.Height) continue;
-                Shelves.Services.Log.Note($"[diag]  dragged {it.Name} {it.Pos.X},{it.Pos.Y} -> {target.X},{target.Y}");
                 view.Move(it.Index, target);
                 moved++;
             }
@@ -188,7 +186,6 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             if (!before.TryGetValue(it.Name, out var was) || was == it.Pos) continue;
             // The user dropped an icon onto this one's spot: leave it where Explorer moved it.
             if (dropped.Any(d => Math.Abs(d.X - was.X) < sp.Width / 2 && Math.Abs(d.Y - was.Y) < sp.Height / 2)) continue;
-            Shelves.Services.Log.Note($"[diag]  back {it.Name} {it.Pos.X},{it.Pos.Y} -> {was.X},{was.Y}");
             view.Move(it.Index, was);
             moved++;
         }
@@ -258,7 +255,6 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             var to = FreeCellNear(c, area, o, w, h, taken);
             taken.Add(to);
             if (to == it.Pos) continue;
-            Shelves.Services.Log.Note($"[diag]  snap {it.Name} {it.Pos.X},{it.Pos.Y} -> {to.X},{to.Y}");
             view.Move(it.Index, to);
             moved++;
         }

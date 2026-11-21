@@ -5,10 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-21
+
 ### Added
-- Shelves can draw the desktop icons itself (tray menu or Settings, General: "Shelves draws the desktop icons"). Windows' own icons are hidden while it runs, so nothing Windows does when an icon is dropped can shuffle them. Icons are selected, opened, renamed, dragged, dropped on folders, the Recycle Bin or other apps, and get the real right-click menus, the desktop's own menu included. Windows' icons come back when Shelves exits.
+- Shelves can draw the desktop icons itself (tray menu or Settings, General: "Shelves draws the desktop icons"). Windows' own icons are hidden while it runs, so nothing Windows does when an icon is dropped can shuffle them. Icons are selected, opened, renamed, cut, copied, dragged (several at once, each at its own spot), dropped on folders, the Recycle Bin or other apps, and get the real right-click menus, the desktop's own menu included. Windows' icons come back when Shelves exits.
+- While icons are dragged with "Align icons to grid" on, the cells they would land on light up.
+- Show grid slots while moving icons (tray menu or Settings, General): faint outlines of the grid's cells while icons are dragged.
+- Windows' own right-click menus in Shelves follow dark mode.
 
 ### Fixed
+- Refresh from the desktop's menu put moved icons back: Windows brings every hidden icon back for a moment and bumps the others aside. Shelves now puts them back where they were.
 - Moving icons twice in a row could throw them back toward where an earlier drag started, or far across the desktop. Each drag now only undoes its own drop, and the grid ignores shelved icons Explorer shows for a moment.
 - Dropping an icon froze the desktop for over a second: Shelves waited on Explorer for every hidden icon it put back, and redrew every shelf each time. A drop now settles in about a third of a second.
 - Moving icons on the desktop pushed other icons aside and could leave the moved ones somewhere else: while Windows handles a drop it pulls every hidden icon on screen and shuffles the rest to make room. Shelves now keeps the screen still through that, puts the dragged icons where they were dropped and every other icon back where it was.

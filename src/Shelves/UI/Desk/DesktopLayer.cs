@@ -271,7 +271,6 @@ sealed partial class DesktopLayer : Form
     {
         if (!IsHandleCreated || dirty is not { } area) return;
         dirty = null;
-        renderWatch.Restart();
         var b = Screen.Bounds;
         if (surface == null || surface.Width != b.Width || surface.Height != b.Height)
         {
@@ -291,16 +290,7 @@ sealed partial class DesktopLayer : Form
             Paint(g, area);
         }
         surface.Push(Handle, b.Location, area);
-        // SHELVES_DUMP_LAYER=folder: saves each monitor's picture after a full redraw, for checking the drawing.
-        if (Environment.GetEnvironmentVariable("SHELVES_DUMP_LAYER") is { Length: > 0 } dump)
-        {
-            if (area.Width == b.Width && area.Height == b.Height)
-                try { surface.Bitmap.Save(Path.Combine(dump, $"layer-{Screen.DeviceName.Trim('\\', '.')}.png")); } catch { }
-            Log.Note($"[layer] {Screen.DeviceName} {icons.Count} icons, {area.Width}x{area.Height} drawn in {renderWatch.ElapsedMilliseconds} ms");
-        }
     }
-
-    readonly System.Diagnostics.Stopwatch renderWatch = new();
 
     void Paint(Graphics g, Rectangle area)
     {

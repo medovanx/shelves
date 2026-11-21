@@ -28,6 +28,7 @@ Roll a shelf up to its title, dock it to the top, bottom, left or right edge, an
 - **Your real desktop icons.** Files stay on the Desktop. A shelf shows them with Windows' own icons and thumbnails and hides Explorer's copy. Double-click opens, right-click shows the real Explorer menu (Open with, Send to, Properties...), F2 renames, Delete sends to the Recycle Bin, and you can drag icons in, out and between shelves.
 - **Draw a shelf.** Right-drag a box on the empty desktop and pick **Create shelf here**, or pick **New shelf** in the desktop's own right-click menu (turn it on in Settings; Windows asks for admin rights once).
 - **Pin open.** Pin a shelf so it never rolls up.
+- **Shelves draws the desktop (optional).** Turn on **Shelves draws the desktop icons** and Shelves draws every desktop icon itself, with Windows' own hidden underneath, so icons never shuffle when you move them. Selecting, opening, renaming, cut, copy, paste, drag and drop and the real right-click menus all work as on Windows' desktop. With **Align icons to grid** on, the cells dragged icons would land on light up, and **Show grid slots while moving icons** outlines the whole grid while you drag.
 - **Roll up.** Double-click a shelf's title to roll it up to just its title bar, and hover over it to peek inside. It rolls back up when the mouse leaves.
 - **Every edge.** Drag a shelf against the top, bottom, left or right edge and it docks there. A shelf on the left or right edge rolls into a thin vertical tab with its title turned sideways, and slides open across the screen. Shelves on the same edge sit side by side.
 - **Tabs.** Give a shelf several tabs, each with its own icons or folder. Click a tab or scroll over the strip to switch, and drag icons onto a tab to put them there.
@@ -146,6 +147,7 @@ Shelves/
 - **الطي:** انقر نقرًا مزدوجًا على عنوان الرف لطيّه، ومرّر المؤشر فوقه لفتحه مؤقتًا.
 - **كل الحواف:** ثبّت الرف على الحافة العليا أو السفلى أو اليسرى أو اليمنى. على الحافتين الجانبيتين ينطوي الرف إلى شريط عمودي.
 - **تبويبات:** اجعل للرف عدة تبويبات، لكل منها أيقوناته أو مجلده.
+- **الرفوف ترسم سطح المكتب (اختياري):** فعّل **الرفوف ترسم أيقونات سطح المكتب** لترسم الرفوف كل أيقونة بنفسها، فلا تتبعثر الأيقونات عند نقلها.
 - **ألوانك:** اختر لونًا وعتامة لكل الرفوف، أو لرف واحد من قائمته.
 - **عرض مجلد:** اجعل الرف يعرض محتويات أي مجلد مباشرة.
 - **إخفاء كل شيء:** انقر نقرًا مزدوجًا على سطح المكتب الفارغ.
