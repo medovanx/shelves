@@ -3,7 +3,7 @@
 All notable changes to Shelves are listed here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.2] - 2026-11-21
 
 ### Fixed
 - Moving an icon on the desktop could make another icon jump to a corner, or the dragged one snap back: Shelves sometimes re-hid the wrong icon after files were added or removed.
@@ -49,6 +49,7 @@ The first release.
 - Import from Stardock Fences.
 - Settings in English and Arabic, start with Windows, and automatic updates from GitHub Releases.
 
+[1.1.2]: https://github.com/medovanx/shelves/releases/tag/v1.1.2
 [1.1.1]: https://github.com/medovanx/shelves/releases/tag/v1.1.1
 [1.1.0]: https://github.com/medovanx/shelves/releases/tag/v1.1.0
 [1.0.1]: https://github.com/medovanx/shelves/releases/tag/v1.0.1
