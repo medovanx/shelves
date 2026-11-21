@@ -304,6 +304,24 @@ sealed partial class DesktopLayer : Form
         var link = app.LinkOverlay(px);
         var cut = app.CutNames;
 
+        if (app.GridSlotsShown)
+        {
+            var smoothing = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.None; // crisp 1 px square outlines
+            // Faint outlines of the grid's cells, under the icons.
+            using var slotPen = new Pen(Color.FromArgb(55, 255, 255, 255), 1);
+            using var slotFill = new SolidBrush(Color.FromArgb(14, 255, 255, 255));
+            var b = Screen.Bounds;
+            foreach (var sr in app.GridSlots(Screen))
+            {
+                var r = new Rectangle(sr.X - b.X + (int)(3 * s), sr.Y - b.Y, sr.Width - (int)(6 * s), sr.Height - (int)(4 * s));
+                if (!r.IntersectsWith(area)) continue;
+                g.FillRectangle(slotFill, r);
+                g.DrawRectangle(slotPen, r.X, r.Y, r.Width - 1, r.Height - 1);
+            }
+            g.SmoothingMode = smoothing;
+        }
+
         foreach (var it in icons)
         {
             if (!DrawnArea(it).IntersectsWith(area)) continue;

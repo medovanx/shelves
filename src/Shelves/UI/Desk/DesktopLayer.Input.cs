@@ -41,6 +41,7 @@ sealed partial class DesktopLayer
                 dragNames = SelectedNames.ToList();
                 if (dragNames.Count == 0) { drag = Drag.None; Capture = false; return; }
                 drag = Drag.ItemGhost;
+                app.SetMovingIcons(true);
                 // Every dragged icon moves at its own spot, as on Windows' desktop, not piled under the mouse.
                 ghost = GhostOf(dragNames, downScreen) ?? new DragGhost(dragNames, IconPx, S);
                 ghost.MoveTo(now);
@@ -227,6 +228,7 @@ sealed partial class DesktopLayer
 
     void EndGhost()
     {
+        app.SetMovingIcons(false);
         ghost?.Close();
         ghost?.Dispose();
         ghost = null;

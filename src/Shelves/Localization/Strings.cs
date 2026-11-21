@@ -93,6 +93,7 @@ public static class L
         ["DesktopMenuFailed"] = ("The desktop menu entry needs administrator rights, and Windows did not give them. Nothing was changed.",
                                  "يحتاج عنصر قائمة سطح المكتب إلى صلاحيات المسؤول، ولم يمنحها ويندوز. لم يتغير شيء."),
         ["DrawDesktop"] = ("Shelves draws the desktop icons", "الرفوف ترسم أيقونات سطح المكتب"),
+        ["ShowGridSlots"] = ("Show grid slots while moving icons", "إظهار خانات الشبكة أثناء نقل الأيقونات"),
         ["AlignToGrid"] = ("Align icons to grid", "محاذاة الأيقونات إلى الشبكة"),
         ["DoubleClickHides"] = ("Double-click the desktop to hide everything", "النقر المزدوج على سطح المكتب يخفي كل شيء"),
         ["Opacity"] = ("Opacity (%)", "العتامة (%)"),

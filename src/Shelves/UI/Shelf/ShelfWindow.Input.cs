@@ -163,6 +163,7 @@ sealed partial class ShelfWindow
                 if (outNames.Count == 0) { drag = DragKind.None; Capture = false; return; }
                 drag = DragKind.ItemOut;
                 app.Keeper.Paused = true;
+                app.SetMovingIcons(true);
                 ghost = new DragGhost(outNames, IconPx, S);
                 ghost.MoveTo(now);
                 return;
@@ -383,6 +384,7 @@ sealed partial class ShelfWindow
         ghost?.Dispose();
         ghost = null;
         app.Keeper.Paused = false;
+        app.SetMovingIcons(false);
     }
 
     /// <summary>The end of Shelves' own drag: onto the desktop (the icons come out there) or into a shelf.</summary>

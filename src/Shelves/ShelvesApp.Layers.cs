@@ -367,6 +367,44 @@ sealed partial class ShelvesApp
         t.Start();
     }
 
+    public void SetShowGridSlots(bool on)
+    {
+        Settings.ShowGridSlots = on;
+        SaveSettings();
+    }
+
+    /// <summary>Grid slots are drawn: icons are being moved, the option is on, and so is snapping to the grid.</summary>
+    public bool GridSlotsShown => movingIcons && Settings.ShowGridSlots && Settings.AlignToGrid && LayerMode;
+    bool movingIcons;
+
+    /// <summary>Icons started or stopped moving (a drag on the desktop or out of a shelf): the slots come and go with it.</summary>
+    public void SetMovingIcons(bool on)
+    {
+        if (movingIcons == on) return;
+        movingIcons = on;
+        if (Settings.ShowGridSlots && Settings.AlignToGrid) foreach (var l in Layers) l.RenderAll();
+    }
+
+    /// <summary>
+    /// Every grid cell on a monitor's work area, as icon boxes in screen coordinates: the same cells
+    /// <see cref="IconKeeper.NearestCell"/> snaps icons to.
+    /// </summary>
+    public List<Rectangle> GridSlots(Screen screen)
+    {
+        var res = new List<Rectangle>();
+        if (!View.Attached) return res;
+        var origin = View.Origin;
+        var sp = View.Spacing;
+        int w = Math.Max(sp.Width, 1), h = Math.Max(sp.Height, 1);
+        var area = screen.WorkingArea;
+        int x0 = area.Left - origin.X + 11, y0 = area.Top - origin.Y + 2;
+        int cols = Math.Max(1, (area.Width - 11) / w), rows = Math.Max(1, (area.Height - 2) / h);
+        for (int c = 0; c < cols; c++)
+            for (int r = 0; r < rows; r++)
+                res.Add(new Rectangle(origin.X + x0 + c * w + boxOffset.X, origin.Y + y0 + r * h + boxOffset.Y, boxSize.Width, boxSize.Height));
+        return res;
+    }
+
     /// <summary>The setting changed (tray menu or settings).</summary>
     public void SetDrawDesktop(bool on)
     {

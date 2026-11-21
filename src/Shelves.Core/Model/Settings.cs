@@ -15,6 +15,8 @@ public sealed class Settings
     public bool DoubleClickHides { get; set; } = true;
     /// <summary>Shelves draws the desktop's icons itself (Explorer's own are hidden while it runs).</summary>
     public bool DrawDesktop { get; set; }
+    /// <summary>With grid alignment on, the desktop Shelves draws shows each grid cell faintly while icons are moved.</summary>
+    public bool ShowGridSlots { get; set; }
     /// <summary>
     /// Snap desktop icons to the grid. Shelves does this itself while it runs, because Windows' own "Align icons to
     /// grid" will not let hidden icons stay off screen. Windows' switch is set to match when Shelves exits.

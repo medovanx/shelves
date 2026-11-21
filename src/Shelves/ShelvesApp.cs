@@ -306,6 +306,7 @@ sealed partial class ShelvesApp : ApplicationContext
         Settings.AlignToGrid = on;
         SaveSettings();
         if (on) Keeper.SnapVisible();
+        foreach (var l in Layers) l.RenderAll();
     }
 
     static bool DesktopInFront() => Native.ClassOf(Native.GetForegroundWindow()) is "Progman" or "WorkerW" or "SysListView32" or "SHELLDLL_DefView";
@@ -682,6 +683,10 @@ sealed partial class ShelvesApp : ApplicationContext
         var grid = new ToolStripMenuItem(L.T("AlignToGrid")) { Checked = Settings.AlignToGrid };
         grid.Click += (_, _) => SetAlignToGrid(!Settings.AlignToGrid);
         m.Items.Add(grid);
+        // Only means something while Shelves draws the desktop and snaps to the grid.
+        var slots = new ToolStripMenuItem(L.T("ShowGridSlots")) { Checked = Settings.ShowGridSlots, Enabled = Settings.AlignToGrid && Settings.DrawDesktop };
+        slots.Click += (_, _) => SetShowGridSlots(!Settings.ShowGridSlots);
+        m.Items.Add(slots);
         var draw = new ToolStripMenuItem(L.T("DrawDesktop")) { Checked = Settings.DrawDesktop };
         draw.Click += (_, _) => SetDrawDesktop(!Settings.DrawDesktop);
         m.Items.Add(draw);
