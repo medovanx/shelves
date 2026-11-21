@@ -462,27 +462,30 @@ sealed partial class DesktopLayer
         renameBox?.Close();
         float s = S;
         var lr = LabelRect(it, true);
-        var client = new Rectangle(it.Box.X - (int)(8 * s), (int)lr.Y - (int)(2 * s), it.Box.Width + (int)(16 * s), (int)(24 * s));
-        var screen = new Rectangle(client.X + Screen.Bounds.X, client.Y + Screen.Bounds.Y, client.Width, client.Height);
-        var f = new Form
-        {
-            FormBorderStyle = FormBorderStyle.None,
-            ShowInTaskbar = false,
-            StartPosition = FormStartPosition.Manual,
-            Bounds = screen,
-            BackColor = Color.White,
-            Owner = this,
-        };
         // The name without its extension is selected, as Explorer does, so typing keeps the type.
         string text = ShellOps.EditName(name, it.Label);
         var tb = new TextBox
         {
             Text = text,
             BorderStyle = BorderStyle.FixedSingle,
-            Font = new Font("Segoe UI", 9f),
+            Font = new Font("Segoe UI", 12f * s, GraphicsUnit.Pixel),
             TextAlign = HorizontalAlignment.Center,
             RightToLeft = L.Ar ? RightToLeft.Yes : RightToLeft.No,
-            Dock = DockStyle.Fill,
+            Location = Point.Empty,
+        };
+        // Just the label's width (a little more) and one line of text, like Explorer's box.
+        int w = it.Box.Width + (int)(6 * s), h = tb.PreferredHeight;
+        tb.Size = new Size(w, h);
+        var screen = new Rectangle(Screen.Bounds.X + it.Box.X - (w - it.Box.Width) / 2, Screen.Bounds.Y + (int)lr.Y - (int)(1 * s), w, h);
+        var f = new Form
+        {
+            FormBorderStyle = FormBorderStyle.None,
+            ShowInTaskbar = false,
+            StartPosition = FormStartPosition.Manual,
+            AutoScaleMode = AutoScaleMode.None,
+            MinimumSize = new Size(1, 1),
+            BackColor = Color.White,
+            Owner = this,
         };
         f.Controls.Add(tb);
         bool done = false;
@@ -505,6 +508,7 @@ sealed partial class DesktopLayer
         tb.LostFocus += (_, _) => Finish(true);
         renameBox = f;
         f.Show(this);
+        f.Bounds = screen; // after Show: a form shown first takes a minimum height of its own
         f.Activate();
         tb.Focus();
         int dot = text.LastIndexOf('.');

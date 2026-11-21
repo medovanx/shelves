@@ -110,6 +110,7 @@ sealed partial class ShelvesApp : ApplicationContext
         WatchDesktop(DesktopDir);
         WatchDesktop(publicDesktop);
         Updater.CleanupOld();
+        ShellOps.WarmNewTypes();
         if (updated) tray.ShowBalloonTip(4000, L.T("AppName"), L.F("Updated", Updater.CurrentText), ToolTipIcon.Info);
         if (FencesRunning()) tray.ShowBalloonTip(8000, L.T("AppName"), L.T("FencesRunning"), ToolTipIcon.Warning);
         Autostart.Apply(Settings.StartWithWindows);

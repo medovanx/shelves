@@ -189,10 +189,27 @@ static class ShellOps
         cm.QueryContextMenu(hmenu, 0, 1, 0x7FFF, 0);
         FixMenuBitmaps(hmenu, deep: true);
         Directory.CreateDirectory(dir);
+        Dump(hmenu, "item");
+        // Submenus fill in when opened (New): ask the menu to fill each, then fix and save those too.
         for (int i = 0; i < GetMenuItemCount(hmenu); i++)
         {
+            var sm = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x4 };
+            GetMenuItemInfo(hmenu, (uint)i, true, ref sm);
+            if (sm.hSubMenu == IntPtr.Zero) continue;
+            if (obj is IContextMenu3 c3) c3.HandleMenuMsg2(0x117, sm.hSubMenu, (IntPtr)i, out _);
+            else if (obj is IContextMenu2 c2) c2.HandleMenuMsg(0x117, sm.hSubMenu, (IntPtr)i);
+            FixMenuBitmaps(sm.hSubMenu, deep: false);
+            Dump(sm.hSubMenu, $"sub{i}-");
+        }
+        Shell32.DestroyMenu(hmenu);
+
+        void Dump(IntPtr menu, string prefix)
+        {
+        for (int i = 0; i < GetMenuItemCount(menu); i++)
+        {
             var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 };
-            GetMenuItemInfo(hmenu, (uint)i, true, ref mii);
+            GetMenuItemInfo(menu, (uint)i, true, ref mii);
+            File.AppendAllText(Path.Combine(dir, "items.txt"), $"{prefix}{i} hbmp={(long)mii.hbmpItem} count={GetMenuItemCount(menu)}" + Environment.NewLine);
             if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
             if (Shell32.GetObject(mii.hbmpItem, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0 || ds.dsBm.bmBits == IntPtr.Zero) continue;
             int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight;
@@ -206,9 +223,9 @@ static class ShellOps
                 g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
                 g.DrawImage(bmp, 0, 0, w * 8, h * 8);
             }
-            big.Save(Path.Combine(dir, $"item{i}.png"));
+            big.Save(Path.Combine(dir, $"{prefix}{i}.png"));
         }
-        Shell32.DestroyMenu(hmenu);
+        }
     }
 
     /// <summary>
@@ -232,11 +249,24 @@ static class ShellOps
             }
             finally { h.Free(); }
             if (deep && mii.hSubMenu != IntPtr.Zero) FixMenuBitmaps(mii.hSubMenu, true);
-            // Small values are the system's own glyphs (HBMMENU_*), not bitmaps.
-            if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
-            if (menuBitmaps.Contains(mii.hbmpItem)) continue;
             string label = new string(text, 0, (int)Math.Min(mii.cch, (uint)text.Length)).Replace("&", "");
-            var copy = VerbIconBitmap(label, mii.hbmpItem) is var v && v != IntPtr.Zero ? v : AlphaCopy(mii.hbmpItem);
+            IntPtr copy;
+            if (mii.hbmpItem == (IntPtr)(-1) /* HBMMENU_CALLBACK */)
+            {
+                // Drawn by Explorer on request (the New submenu), which cannot reach across to this program's
+                // menu: the entry's file type gives the icon instead; the first entry is Folder.
+                copy = NewItemIcon(label, first: i == 0);
+            }
+            else
+            {
+                // Small values are the system's own glyphs (HBMMENU_*), not bitmaps.
+                if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
+                if (menuBitmaps.Contains(mii.hbmpItem)) continue;
+                copy = VerbIconBitmap(label, mii.hbmpItem) is var v && v != IntPtr.Zero ? v : AlphaCopy(mii.hbmpItem);
+                // A bitmap this program cannot even read (the New submenu's, made inside Explorer): by file type.
+                if (copy == IntPtr.Zero && Shell32.GetObject(mii.hbmpItem, Marshal.SizeOf<Shell32.DIBSECTION>(), out _) == 0)
+                    copy = NewItemIcon(label, first: i == 0 && IsNewMenu(hmenu));
+            }
             if (copy == IntPtr.Zero) continue;
             menuBitmaps.Add(copy);
             var set = new MENUITEMINFO { cbSize = mii.cbSize, fMask = 0x80, hbmpItem = copy };
@@ -247,7 +277,8 @@ static class ShellOps
     /// <summary>A premultiplied 32-bit copy of a bitmap, or zero when it has no alpha to keep.</summary>
     static unsafe IntPtr AlphaCopy(IntPtr hbmp)
     {
-        if (Shell32.GetObject(hbmp, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0) return IntPtr.Zero;
+        int got = Shell32.GetObject(hbmp, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds);
+        if (got == 0) return IntPtr.Zero;
         int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight;
         if (w <= 0 || h <= 0 || w > 256 || h > 256) return IntPtr.Zero;
         var pixels = new uint[w * h];
@@ -266,7 +297,13 @@ static class ShellOps
             if (a != 0) alpha = true;
             if (((px >> 16) & 255) > a || ((px >> 8) & 255) > a || (px & 255) > a) straight = true;
         }
-        if (!alpha) return IntPtr.Zero;
+        // No alpha at all (an old-style bitmap, as the New submenu's are when they reach us): opaque, and the same
+        // flattened-onto-black check below applies.
+        if (!alpha)
+        {
+            if (pixels.All(px => (px & 0xFFFFFF) == 0)) return IntPtr.Zero; // nothing readable
+            for (int k = 0; k < pixels.Length; k++) pixels[k] |= 0xFF000000;
+        }
         // Every pixel opaque and the corners black: the icon was flattened onto black on its way here (menus from
         // Explorer). Black reached from the edges becomes transparent, and the dark rim next to it fades by its
         // brightness, which undoes the blend for anti-aliased edges.
@@ -339,9 +376,15 @@ static class ShellOps
         int comma = file.LastIndexOf(',');
         if (comma > 1 && int.TryParse(file[(comma + 1)..].Trim(), out var ix)) { index = ix; file = file[..comma].Trim('"', ' '); }
         if (SHDefExtractIcon(file, index, 0, out var big, out _, (uint)size) != 0 || big == IntPtr.Zero) return IntPtr.Zero;
-        try
+        try { return IconDib(big, size); }
+        finally { DestroyIcon(big); }
+    }
+
+    /// <summary>An icon drawn into a premultiplied DIB of <paramref name="size"/> pixels, for a menu.</summary>
+    static IntPtr IconDib(IntPtr hicon, int size)
+    {
         {
-            using var ic = System.Drawing.Icon.FromHandle(big);
+            using var ic = System.Drawing.Icon.FromHandle(hicon);
             using var bmp = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(bmp))
             {
@@ -357,8 +400,112 @@ static class ShellOps
             }
             finally { bmp.UnlockBits(data); }
         }
-        finally { DestroyIcon(big); }
     }
+
+    static Dictionary<string, string>? newTypes;
+
+    /// <summary>True for the New submenu: it holds the Shortcut entry (by its type name), which always comes second.</summary>
+    static bool IsNewMenu(IntPtr hmenu)
+    {
+        var fi = new SHFILEINFO();
+        if (SHGetFileInfo("x.lnk", 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x400 | 0x10) == IntPtr.Zero) return false;
+        var sb = new System.Text.StringBuilder(260);
+        return GetMenuString(hmenu, 1, sb, sb.Capacity, 0x400 /* MF_BYPOSITION */) > 0
+               && string.Equals(sb.ToString().Replace("&", "").Trim(), fi.szTypeName, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetMenuString(IntPtr m, uint id, System.Text.StringBuilder s, int n, uint flags);
+
+    /// <summary>The icon for an entry of the New submenu: its file type's icon, by the type's name.</summary>
+    static IntPtr NewItemIcon(string label, bool first)
+    {
+        int size = Native.GetSystemMetrics(49 /* SM_CXSMICON */);
+        newTypes ??= ReadNewTypes();
+        IntPtr hicon = IntPtr.Zero;
+        if (newTypes.TryGetValue(label.Trim(), out var ext))
+        {
+            var fi = new SHFILEINFO();
+            if (SHGetFileInfo("x" + ext, 0x80 /* NORMAL */, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x100 | 0x1 | 0x10 /* ICON | SMALLICON | USEFILEATTRIBUTES */) != IntPtr.Zero)
+                hicon = fi.hIcon;
+        }
+        else if (first)
+        {
+            var info = new SHSTOCKICONINFO { cbSize = (uint)Marshal.SizeOf<SHSTOCKICONINFO>() };
+            if (SHGetStockIconInfo(3 /* SIID_FOLDER */, 0x100 | 0x1 /* ICON | SMALLICON */, ref info) == 0) hicon = info.hIcon;
+        }
+        if (hicon == IntPtr.Zero) return IntPtr.Zero;
+        try { return IconDib(hicon, size); }
+        finally { DestroyIcon(hicon); }
+    }
+
+    /// <summary>Type name to extension for every type that offers a New entry (a ShellNew key), read once.</summary>
+    static Dictionary<string, string> ReadNewTypes()
+    {
+        var res = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+        var later = new List<string>();
+        try
+        {
+            var root = Microsoft.Win32.Registry.ClassesRoot;
+            foreach (var ext in root.GetSubKeyNames())
+            {
+                if (ext.Length < 2 || ext[0] != '.') continue;
+                using var k = root.OpenSubKey(ext);
+                if (k == null) continue;
+                bool hasNew = k.OpenSubKey("ShellNew") is { } sn && Close(sn);
+                if (!hasNew && k.GetValue(null) is string progId && progId.Length > 0)
+                    hasNew = k.OpenSubKey(progId + @"\ShellNew") is { } psn && Close(psn);
+                // Types without a ShellNew key can still be in New: packaged apps (Notepad, Paint) add theirs
+                // their own way. Their names are added after the rest, so a ShellNew type wins a shared name.
+                if (!hasNew) { later.Add(ext); continue; }
+                var fi = new SHFILEINFO();
+                if (SHGetFileInfo("x" + ext, 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x400 | 0x10 /* TYPENAME | USEFILEATTRIBUTES */) != IntPtr.Zero
+                    && fi.szTypeName.Length > 0)
+                    res.TryAdd(fi.szTypeName, ext);
+                // The New menu names a type by its class's own name, which can differ from the name above when
+                // another app now opens the type: add the class's names too.
+                foreach (var cls in new[] { k.GetValue(null) as string, (k.OpenSubKey("ShellNew") is { } sn2 ? Take(sn2, "ItemName") : null) })
+                {
+                    if (string.IsNullOrEmpty(cls)) continue;
+                    if (cls.StartsWith('@')) { if (Indirect(cls) is { } t) res.TryAdd(t, ext); continue; }
+                    using var ck = root.OpenSubKey(cls);
+                    if (ck == null) continue;
+                    if (ck.GetValue("FriendlyTypeName") is string ftn && Indirect(ftn) is { } f) res.TryAdd(f, ext);
+                    if (ck.GetValue(null) is string dn && dn.Length > 0) res.TryAdd(dn, ext);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
+        foreach (var ext in later)
+        {
+            var fi = new SHFILEINFO();
+            if (SHGetFileInfo("x" + ext, 0x80, ref fi, (uint)Marshal.SizeOf<SHFILEINFO>(), 0x400 | 0x10) != IntPtr.Zero && fi.szTypeName.Length > 0)
+                res.TryAdd(fi.szTypeName, ext);
+        }
+        // Paint's own New entry, whose name no file type carries.
+        res.TryAdd("Bitmap image", ".bmp");
+        return res;
+
+        static bool Close(Microsoft.Win32.RegistryKey key) { key.Dispose(); return true; }
+        static string? Take(Microsoft.Win32.RegistryKey key, string name) { using (key) return key.GetValue(name) as string; }
+        static string? Indirect(string v)
+        {
+            if (!v.StartsWith('@')) return v;
+            var sb = new System.Text.StringBuilder(260);
+            return SHLoadIndirectString(v, sb, sb.Capacity, IntPtr.Zero) == 0 ? sb.ToString() : null;
+        }
+    }
+
+    /// <summary>Reads the New types in the background at startup, so the first New menu opens at once.</summary>
+    public static void WarmNewTypes() => Task.Run(() => { try { newTypes ??= ReadNewTypes(); } catch { } });
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct SHFILEINFO
+    {
+        public IntPtr hIcon; public int iIcon; public uint dwAttributes;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
+    }
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SHGetFileInfo(string path, uint attrs, ref SHFILEINFO fi, uint size, uint flags);
 
     static Dictionary<string, string> ReadVerbIcons()
     {
