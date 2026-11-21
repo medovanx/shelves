@@ -507,8 +507,7 @@ sealed partial class DesktopLayer
         {
             if (done) return;
             done = true;
-            string v = tb.Text.Replace("", "").Replace("
-", "").Trim();
+            string v = tb.Text.Replace("\r", "").Replace("\n", "").Trim();
             renameBox = null;
             renamingName = null;
             InvalidateName(name);
