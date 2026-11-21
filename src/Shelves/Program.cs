@@ -31,6 +31,14 @@ static class Program
             Application.Run(host);
             return 0;
         }
+        if (args.Length > 1 && args[0] == "--menu-icons")
+        {
+            // The desktop menu's icons after Shelves fixes them, saved as images (local check only).
+            using var v = new DesktopView();
+            if (!v.Attach()) return 1;
+            ShellOps.DumpBackgroundMenuIcons(v, args[1]);
+            return 0;
+        }
         if (args.Length > 1 && args[0] == "--compose")
         {
             ApplicationConfiguration.Initialize();

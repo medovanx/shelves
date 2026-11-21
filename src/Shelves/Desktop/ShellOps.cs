@@ -179,6 +179,38 @@ static class ShellOps
 
     static readonly List<IntPtr> menuBitmaps = [];
 
+    /// <summary>For checking (--menu-icons): builds the desktop's background menu, fixes its icons, saves each as a PNG.</summary>
+    public static unsafe void DumpBackgroundMenuIcons(DesktopView view, string dir)
+    {
+        Guid iid = Shell32.IID_IContextMenu;
+        view.ShellView!.GetItemObject(0, ref iid, out var obj);
+        var cm = (IContextMenu)obj;
+        var hmenu = Shell32.CreatePopupMenu();
+        cm.QueryContextMenu(hmenu, 0, 1, 0x7FFF, 0);
+        FixMenuBitmaps(hmenu, deep: true);
+        Directory.CreateDirectory(dir);
+        for (int i = 0; i < GetMenuItemCount(hmenu); i++)
+        {
+            var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 };
+            GetMenuItemInfo(hmenu, (uint)i, true, ref mii);
+            if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
+            if (Shell32.GetObject(mii.hbmpItem, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) == 0 || ds.dsBm.bmBits == IntPtr.Zero) continue;
+            int w = ds.dsBm.bmWidth, h = ds.dsBm.bmHeight;
+            using var bmp = new Bitmap(w, h, w * 4, PixelFormat.Format32bppPArgb, ds.dsBm.bmBits);
+            // Scaled up on a mid grey so the edges are easy to judge.
+            using var big = new Bitmap(w * 8, h * 8);
+            using (var g = Graphics.FromImage(big))
+            {
+                g.Clear(Color.FromArgb(200, 200, 200));
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.Half;
+                g.DrawImage(bmp, 0, 0, w * 8, h * 8);
+            }
+            big.Save(Path.Combine(dir, $"item{i}.png"));
+        }
+        Shell32.DestroyMenu(hmenu);
+    }
+
     /// <summary>
     /// Menu icons made in Explorer (the desktop's background menu comes from there) lose their transparency when
     /// the menu is shown by another program, and draw on black. Each is copied into a bitmap of our own with its
@@ -189,13 +221,22 @@ static class ShellOps
         int n = GetMenuItemCount(hmenu);
         for (int i = 0; i < n; i++)
         {
-            var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 /* MIIM_BITMAP */ | 0x4 /* MIIM_SUBMENU */ };
-            if (!GetMenuItemInfo(hmenu, (uint)i, true, ref mii)) continue;
+            var text = new char[260];
+            var mii = new MENUITEMINFO { cbSize = (uint)Marshal.SizeOf<MENUITEMINFO>(), fMask = 0x80 /* MIIM_BITMAP */ | 0x4 /* MIIM_SUBMENU */ | 0x40 /* MIIM_STRING */ };
+            var h = GCHandle.Alloc(text, GCHandleType.Pinned);
+            try
+            {
+                mii.dwTypeData = h.AddrOfPinnedObject();
+                mii.cch = (uint)text.Length - 1;
+                if (!GetMenuItemInfo(hmenu, (uint)i, true, ref mii)) continue;
+            }
+            finally { h.Free(); }
             if (deep && mii.hSubMenu != IntPtr.Zero) FixMenuBitmaps(mii.hSubMenu, true);
             // Small values are the system's own glyphs (HBMMENU_*), not bitmaps.
             if ((long)mii.hbmpItem is >= -1 and <= 11) continue;
             if (menuBitmaps.Contains(mii.hbmpItem)) continue;
-            var copy = AlphaCopy(mii.hbmpItem);
+            string label = new string(text, 0, (int)Math.Min(mii.cch, (uint)text.Length)).Replace("&", "");
+            var copy = VerbIconBitmap(label, mii.hbmpItem) is var v && v != IntPtr.Zero ? v : AlphaCopy(mii.hbmpItem);
             if (copy == IntPtr.Zero) continue;
             menuBitmaps.Add(copy);
             var set = new MENUITEMINFO { cbSize = mii.cbSize, fMask = 0x80, hbmpItem = copy };
@@ -226,6 +267,14 @@ static class ShellOps
             if (((px >> 16) & 255) > a || ((px >> 8) & 255) > a || (px & 255) > a) straight = true;
         }
         if (!alpha) return IntPtr.Zero;
+        // Every pixel opaque and the corners black: the icon was flattened onto black on its way here (menus from
+        // Explorer). Black reached from the edges becomes transparent, and the dark rim next to it fades by its
+        // brightness, which undoes the blend for anti-aliased edges.
+        if (pixels.All(px => px >> 24 == 255) && (pixels[0] & 0xFFFFFF) == 0 && (pixels[^1] & 0xFFFFFF) == 0)
+        {
+            ClearEdgeBlack(pixels, w, h);
+            return ToDib(pixels, w, h);
+        }
         if (straight)
             for (int k = 0; k < pixels.Length; k++)
             {
@@ -233,12 +282,114 @@ static class ShellOps
                 uint r = ((px >> 16) & 255) * a / 255, g = ((px >> 8) & 255) * a / 255, b = (px & 255) * a / 255;
                 pixels[k] = (a << 24) | (r << 16) | (g << 8) | b;
             }
-        var bi2 = bi;
-        var dib = CreateDIBSection(IntPtr.Zero, ref bi2, 0, out var bits, IntPtr.Zero, 0);
+        return ToDib(pixels, w, h);
+    }
+
+    /// <summary>A top-down 32-bit DIB section holding premultiplied pixels.</summary>
+    static unsafe IntPtr ToDib(uint[] pixels, int w, int h)
+    {
+        var bi = new Shell32.BITMAPINFOHEADER { biSize = (uint)Marshal.SizeOf<Shell32.BITMAPINFOHEADER>(), biWidth = w, biHeight = -h, biPlanes = 1, biBitCount = 32 };
+        var dib = CreateDIBSection(IntPtr.Zero, ref bi, 0, out var bits, IntPtr.Zero, 0);
         if (dib == IntPtr.Zero) return IntPtr.Zero;
         fixed (uint* src = pixels) Buffer.MemoryCopy(src, (void*)bits, pixels.Length * 4L, pixels.Length * 4L);
         return dib;
     }
+
+    static void ClearEdgeBlack(uint[] px, int w, int h)
+    {
+        static int Max(uint p) => (int)Math.Max((p >> 16) & 255, Math.Max((p >> 8) & 255, p & 255));
+        var clear = new bool[px.Length];
+        var stack = new Stack<int>();
+        for (int x = 0; x < w; x++) { stack.Push(x); stack.Push((h - 1) * w + x); }
+        for (int y = 0; y < h; y++) { stack.Push(y * w); stack.Push(y * w + w - 1); }
+        while (stack.Count > 0)
+        {
+            int k = stack.Pop();
+            if (clear[k] || Max(px[k]) > 8) continue;
+            clear[k] = true;
+            int x = k % w, y = k / w;
+            if (x > 0) stack.Push(k - 1);
+            if (x < w - 1) stack.Push(k + 1);
+            if (y > 0) stack.Push(k - w);
+            if (y < h - 1) stack.Push(k + w);
+        }
+        for (int k = 0; k < px.Length; k++)
+        {
+            if (clear[k]) { px[k] = 0; continue; }
+            int x = k % w, y = k / w;
+            bool rim = (x > 0 && clear[k - 1]) || (x < w - 1 && clear[k + 1]) || (y > 0 && clear[k - w]) || (y < h - 1 && clear[k + w]);
+            // Blended over black, a rim pixel's colour is already its premultiplied value; its alpha is its brightness.
+            if (rim) px[k] = ((uint)Max(px[k]) << 24) | (px[k] & 0xFFFFFF);
+        }
+    }
+
+    static Dictionary<string, string>? verbIcons;
+
+    /// <summary>
+    /// The desktop menu's own entries (Display settings, Personalize, New shelf, entries apps add) are registry
+    /// verbs with an Icon value: their real icon, at the menu bitmap's size, beats one rebuilt from a flattened copy.
+    /// </summary>
+    static IntPtr VerbIconBitmap(string label, IntPtr like)
+    {
+        verbIcons ??= ReadVerbIcons();
+        if (!verbIcons.TryGetValue(label.Trim(), out var loc)) return IntPtr.Zero;
+        int size = Shell32.GetObject(like, Marshal.SizeOf<Shell32.DIBSECTION>(), out var ds) != 0 ? ds.dsBm.bmWidth : 16;
+        string file = Environment.ExpandEnvironmentVariables(loc.Trim('"'));
+        int index = 0;
+        int comma = file.LastIndexOf(',');
+        if (comma > 1 && int.TryParse(file[(comma + 1)..].Trim(), out var ix)) { index = ix; file = file[..comma].Trim('"', ' '); }
+        if (SHDefExtractIcon(file, index, 0, out var big, out _, (uint)size) != 0 || big == IntPtr.Zero) return IntPtr.Zero;
+        try
+        {
+            using var ic = System.Drawing.Icon.FromHandle(big);
+            using var bmp = new Bitmap(size, size, PixelFormat.Format32bppPArgb);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawIcon(ic, new Rectangle(0, 0, size, size));
+            }
+            var data = bmp.LockBits(new Rectangle(0, 0, size, size), ImageLockMode.ReadOnly, PixelFormat.Format32bppPArgb);
+            try
+            {
+                var pixels = new uint[size * size];
+                unsafe { fixed (uint* d = pixels) for (int y = 0; y < size; y++) Buffer.MemoryCopy((byte*)data.Scan0 + y * data.Stride, d + y * size, size * 4L, size * 4L); }
+                return ToDib(pixels, size, size);
+            }
+            finally { bmp.UnlockBits(data); }
+        }
+        finally { DestroyIcon(big); }
+    }
+
+    static Dictionary<string, string> ReadVerbIcons()
+    {
+        var res = new Dictionary<string, string>(StringComparer.CurrentCultureIgnoreCase);
+        foreach (var path in new[] { @"DesktopBackground\Shell", @"Directory\Background\shell" })
+        {
+            try
+            {
+                using var root = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(path);
+                if (root == null) continue;
+                foreach (var name in root.GetSubKeyNames())
+                {
+                    using var k = root.OpenSubKey(name);
+                    if (k?.GetValue("Icon") is not string icon || icon.Length == 0) continue;
+                    var text = (k.GetValue("MUIVerb") as string) ?? (k.GetValue(null) as string);
+                    if (string.IsNullOrEmpty(text)) continue;
+                    if (text.StartsWith('@'))
+                    {
+                        var sb = new System.Text.StringBuilder(260);
+                        if (SHLoadIndirectString(text, sb, sb.Capacity, IntPtr.Zero) != 0) continue;
+                        text = sb.ToString();
+                    }
+                    res.TryAdd(text.Replace("&", "").Trim(), icon);
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
+        }
+        return res;
+    }
+
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)] static extern int SHLoadIndirectString(string src, System.Text.StringBuilder outBuf, int cch, IntPtr reserved);
 
     [StructLayout(LayoutKind.Sequential)]
     struct MENUITEMINFO
