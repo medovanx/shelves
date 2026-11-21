@@ -31,7 +31,7 @@ sealed class DesktopView : IDisposable
 
     IFolderView2? view;
     IShellFolder? folder;
-    IntPtr process, buffer;
+    IntPtr process, buffer, textBuffer;
     public IntPtr ListView { get; private set; }
     public IntPtr DefView { get; private set; }
     public Size Spacing { get; private set; } = new(76, 103);
@@ -63,6 +63,8 @@ sealed class DesktopView : IDisposable
             Native.GetWindowThreadProcessId(ListView, out uint pid);
             process = OpenProcess(0x0008 | 0x0010 | 0x0020 /* VM_OPERATION | VM_READ | VM_WRITE */, false, pid);
             buffer = VirtualAllocEx(process, IntPtr.Zero, 64, 0x3000, 4);
+            // An LVITEM (first 128 bytes) and its text (the rest), for reading icon labels.
+            textBuffer = VirtualAllocEx(process, IntPtr.Zero, 128 + 1024, 0x3000, 4);
             return buffer != IntPtr.Zero;
         }
         catch (Exception ex) when (ex is COMException or InvalidCastException or NullReferenceException)
@@ -93,6 +95,7 @@ sealed class DesktopView : IDisposable
     public void Detach()
     {
         if (buffer != IntPtr.Zero) { VirtualFreeEx(process, buffer, 0, 0x8000); buffer = IntPtr.Zero; }
+        if (textBuffer != IntPtr.Zero) { VirtualFreeEx(process, textBuffer, 0, 0x8000); textBuffer = IntPtr.Zero; }
         if (process != IntPtr.Zero) { CloseHandle(process); process = IntPtr.Zero; }
         if (view != null) { try { Marshal.ReleaseComObject(view); } catch { } view = null; }
         if (folder != null) { try { Marshal.ReleaseComObject(folder); } catch { } folder = null; }
@@ -176,6 +179,33 @@ sealed class DesktopView : IDisposable
         ReadProcessMemory(process, buffer, out Native.POINT p, 8, out _);
         return new Pt(p.X, p.Y);
     }
+
+    /// <summary>
+    /// The label Explorer shows for the icon at a list-view index, read with plain list-view messages (no COM), or
+    /// null if it cannot be read. Used to check an index still holds the icon it held at the last sync.
+    /// </summary>
+    public string? Label(int index)
+    {
+        if (textBuffer == IntPtr.Zero) return null;
+        var item = new LVITEMW { iSubItem = 0, pszText = textBuffer + 128, cchTextMax = 511 };
+        if (!WriteProcessMemory(process, textBuffer, ref item, Marshal.SizeOf<LVITEMW>(), out _)) return null;
+        int len = (int)Send(0x1073 /* LVM_GETITEMTEXTW */, index, textBuffer, 200);
+        if (len < 0) return null;
+        var bytes = new byte[Math.Min(len, 511) * 2];
+        if (bytes.Length > 0 && !ReadProcessMemory(process, textBuffer + 128, bytes, bytes.Length, out _)) return null;
+        return System.Text.Encoding.Unicode.GetString(bytes);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct LVITEMW
+    {
+        public uint mask; public int iItem, iSubItem; public uint state, stateMask;
+        public IntPtr pszText; public int cchTextMax, iImage; public IntPtr lParam;
+        public int iIndent, iGroupId; public uint cColumns; public IntPtr puColumns, piColFmt; public int iGroup;
+    }
+
+    [DllImport("kernel32.dll")] static extern bool WriteProcessMemory(IntPtr p, IntPtr a, ref LVITEMW b, int size, out IntPtr written);
+    [DllImport("kernel32.dll")] static extern bool ReadProcessMemory(IntPtr p, IntPtr a, byte[] b, int size, out IntPtr read);
 
     /// <summary>List-view indices of the selected icons (the ones a drag carries).</summary>
     public HashSet<int> SelectedIndices()

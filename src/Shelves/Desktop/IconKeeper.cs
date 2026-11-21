@@ -15,6 +15,8 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     int lastCount = -1, lastParked = -1;
     /// <summary>The shelved icons' list-view indices at the last full sync, with their off-screen spots.</summary>
     Dictionary<int, Pt> slotByIndex = [];
+    /// <summary>The label at each of those indices at the last sync, to check an index still holds the same icon.</summary>
+    Dictionary<int, string?> labelByIndex = [];
     /// <summary>Set when icons were re-hidden by index (fast path); a full sync confirms by name soon after.</summary>
     public bool NeedsConfirm { get; private set; }
     string lastNames = "";
@@ -64,6 +66,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         lastCount = view.Count;
         lastParked = parked;
         slotByIndex = slots;
+        labelByIndex = slots.Keys.ToDictionary(i => i, view.Label);
         NeedsConfirm = false;
         if (homes) HomesChanged?.Invoke();
         Last = view.Items();
@@ -93,10 +96,23 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         // sync by name follows once things settle (NeedsConfirm), in case the indices were reordered (a sort).
         if (count == lastCount && parked < lastParked && slotByIndex.Count > 0)
         {
+            // Explorer can reorder its list while it handles a drop (the dropped icons move), so an index may now
+            // hold a different icon: check each one's label first, and fall back to the by-name sync on any doubt.
+            var toPark = new List<(int i, Pt spot)>();
+            bool sure = true;
             foreach (var (i, spot) in slotByIndex)
-                if (i < positions.Length && !DesktopView.IsParked(positions[i])) view.PostMove(i, spot);
-            NeedsConfirm = true;
-            return true;
+            {
+                if (i >= positions.Length || DesktopView.IsParked(positions[i])) continue;
+                var label = view.Label(i);
+                if (label == null || !labelByIndex.TryGetValue(i, out var want) || want != label) { sure = false; break; }
+                toPark.Add((i, spot));
+            }
+            if (sure)
+            {
+                foreach (var (i, spot) in toPark) view.PostMove(i, spot);
+                NeedsConfirm = true;
+                return true;
+            }
         }
         // Files came or went: indices may have shifted, so find icons by name.
         Sync();
