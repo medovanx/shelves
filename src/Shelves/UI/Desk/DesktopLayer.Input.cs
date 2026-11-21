@@ -49,9 +49,16 @@ sealed partial class DesktopLayer
             case Drag.ItemGhost:
                 ghost?.MoveTo(now);
                 if (app.LayerAt(now) is { } over)
-                    over.ShowDropTarget(over.DropTargetAt(over.ToClient(now), dragNames));
+                {
+                    var target = over.DropTargetAt(over.ToClient(now), dragNames);
+                    over.ShowDropTarget(target);
+                    // Over plain desktop: light up the cells the icons would land on.
+                    if (target == null) app.PreviewDrop(dragNames, now.X - downScreen.X, now.Y - downScreen.Y, now);
+                    else app.ClearDropPreview();
+                }
                 else
                 {
+                    app.ClearDropPreview();
                     foreach (var l in app.Layers) l.ShowDropTarget(null);
                     // Over another app (an Explorer window, a chat, a browser): hand over to the shell's own drag.
                     if (app.ShelfAt(now) == null)

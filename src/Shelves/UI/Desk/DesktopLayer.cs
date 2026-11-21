@@ -244,6 +244,20 @@ sealed partial class DesktopLayer : Form
         if (name != null) Invalidate(icons.FirstOrDefault(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase)));
     }
 
+    /// <summary>Redraws screen rectangles that fall on this monitor (the drop preview's cells).</summary>
+    public void RedrawScreenRects(IEnumerable<Rectangle> screenRects)
+    {
+        var b = Screen.Bounds;
+        bool any = false;
+        foreach (var r in screenRects)
+        {
+            if (!r.IntersectsWith(b)) continue;
+            InvalidateRect(Rectangle.Inflate(new Rectangle(r.X - b.X, r.Y - b.Y, r.Width, r.Height), 2, 2));
+            any = true;
+        }
+        if (any) Render();
+    }
+
     void InvalidateRect(Rectangle r) => dirty = dirty is { } d ? Rectangle.Union(d, r) : r;
 
     public void RenderAll()
@@ -303,6 +317,21 @@ sealed partial class DesktopLayer : Form
         bool shadows = app.LabelShadows;
         var link = app.LinkOverlay(px);
         var cut = app.CutNames;
+
+        // Where the dragged icons would land if dropped now.
+        if (app.DropCells.Count > 0)
+        {
+            var b = Screen.Bounds;
+            using var cellFill = new SolidBrush(Color.FromArgb(50, 255, 255, 255));
+            using var cellPen = new Pen(Color.FromArgb(150, 255, 255, 255), 1);
+            foreach (var cr in app.DropCells)
+            {
+                var r = new Rectangle(cr.X - b.X + (int)(3 * s), cr.Y - b.Y, cr.Width - (int)(6 * s), cr.Height - (int)(4 * s));
+                if (!r.IntersectsWith(area)) continue;
+                g.FillRectangle(cellFill, r);
+                g.DrawRectangle(cellPen, r.X, r.Y, r.Width - 1, r.Height - 1);
+            }
+        }
 
         if (app.GridSlotsShown)
         {

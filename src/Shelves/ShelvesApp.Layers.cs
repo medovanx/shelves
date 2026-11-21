@@ -238,6 +238,24 @@ sealed partial class ShelvesApp
 
     void Place(List<DesktopItem> items, List<DesktopItem> moving, List<Pt> targets, Rectangle work)
     {
+        var final = Landing(items, moving, targets, work);
+        for (int k = 0; k < moving.Count; k++)
+        {
+            View.Move(moving[k].Index, final[k]);
+            Layout.Home.Remove(moving[k].Name);
+        }
+        // Explorer keeps moves only once it saves them; a Refresh would otherwise put the icons back.
+        View.SaveState();
+        ReloadLayers();
+    }
+
+    /// <summary>
+    /// Where moved icons end up: kept inside the work area, and with grid alignment on, each on the nearest
+    /// cell no other icon holds. Used for the drop itself and for its preview while dragging.
+    /// </summary>
+    List<Pt> Landing(List<DesktopItem> items, List<DesktopItem> moving, List<Pt> targets, Rectangle work)
+    {
+        var res = new List<Pt>(moving.Count);
         var origin = View.Origin;
         var sp = View.Spacing;
         int w = Math.Max(sp.Width, 1), h = Math.Max(sp.Height, 1);
@@ -257,12 +275,41 @@ sealed partial class ShelvesApp
                 p = IconKeeper.FreeCellNear(c, area, origin, w, h, taken);
                 taken.Add(p);
             }
-            View.Move(moving[k].Index, p);
-            Layout.Home.Remove(moving[k].Name);
+            res.Add(p);
         }
-        // Explorer keeps moves only once it saves them; a Refresh would otherwise put the icons back.
-        View.SaveState();
-        ReloadLayers();
+        return res;
+    }
+
+    // ---- Drop preview: the cells dragged icons would land on ----------------------------------------------------
+
+    /// <summary>The desktop's items when a drag began (read once, not on every mouse move).</summary>
+    List<DesktopItem>? dragItems;
+    /// <summary>The cells to highlight, in screen coordinates.</summary>
+    public List<Rectangle> DropCells { get; private set; } = [];
+
+    /// <summary>While dragging icons over the desktop: highlights the cells they would land on if dropped now.</summary>
+    public void PreviewDrop(List<string> names, int dx, int dy, Point at)
+    {
+        if (!Settings.AlignToGrid || !LayerMode) { ClearDropPreview(); return; }
+        dragItems ??= View.Items();
+        var set = new HashSet<string>(names, StringComparer.OrdinalIgnoreCase);
+        var moving = dragItems.Where(i => set.Contains(i.Name) && !DesktopView.IsParked(i.Pos)).ToList();
+        var final = Landing(dragItems, moving, moving.Select(i => new Pt(i.Pos.X + dx, i.Pos.Y + dy)).ToList(), Screen.FromPoint(at).WorkingArea);
+        var origin = View.Origin;
+        var cells = final.Select(p => new Rectangle(origin.X + p.X + boxOffset.X, origin.Y + p.Y + boxOffset.Y, boxSize.Width, boxSize.Height)).ToList();
+        if (cells.SequenceEqual(DropCells)) return;
+        var old = DropCells;
+        DropCells = cells;
+        foreach (var l in Layers) l.RedrawScreenRects(old.Concat(cells));
+    }
+
+    public void ClearDropPreview()
+    {
+        dragItems = null;
+        if (DropCells.Count == 0) return;
+        var old = DropCells;
+        DropCells = [];
+        foreach (var l in Layers) l.RedrawScreenRects(old);
     }
 
     /// <summary>Our icons dropped onto a folder, the Recycle Bin or a program: the shell does what Explorer would.</summary>
@@ -382,6 +429,7 @@ sealed partial class ShelvesApp
     {
         if (movingIcons == on) return;
         movingIcons = on;
+        if (!on) ClearDropPreview();
         if (Settings.ShowGridSlots && Settings.AlignToGrid) foreach (var l in Layers) l.RenderAll();
     }
 
