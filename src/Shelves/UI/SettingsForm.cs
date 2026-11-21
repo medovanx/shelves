@@ -11,7 +11,7 @@ sealed class SettingsForm : Form
 
     // General
     readonly ThemedCombo cmbLang = Combo();
-    readonly ToggleSwitch tglStartup = new(), tglDoubleClick = new(), tglDesktopMenu = new();
+    readonly ToggleSwitch tglStartup = new(), tglDoubleClick = new(), tglDesktopMenu = new(), tglGrid = new();
     // Appearance
     readonly ThemedNumber numOpacity = Num(0, 100), numRadius = Num(0, 16), numLines = Num(1, 3);
     readonly SwatchPicker swatches = new();
@@ -125,10 +125,12 @@ sealed class SettingsForm : Form
         tglStartup.Checked = s.StartWithWindows;
         tglDesktopMenu.Checked = DesktopMenu.Installed();
         tglDoubleClick.Checked = s.DoubleClickHides;
+        tglGrid.Checked = s.AlignToGrid;
         AddPage(Art.IconSettings, L.T("General"), Card(L.T("General"), Art.IconSettings,
             Row(L.T("Language"), cmbLang),
             Row(L.T("StartWithWindows"), tglStartup),
             Row(L.T("DesktopMenu"), tglDesktopMenu),
+            Row(L.T("AlignToGrid"), tglGrid),
             Row(L.T("DoubleClickHides"), tglDoubleClick)));
     }
 
@@ -296,6 +298,7 @@ sealed class SettingsForm : Form
         }
         s.DesktopMenu = DesktopMenu.Installed();
         s.DoubleClickHides = tglDoubleClick.Checked;
+        bool gridChanged = s.AlignToGrid != tglGrid.Checked;
         s.Opacity = (int)numOpacity.Value;
         s.Tint = swatches.Value;
         s.CornerRadius = (int)numRadius.Value;
@@ -308,6 +311,7 @@ sealed class SettingsForm : Form
         s.LeaveDelayMs = (int)numLeave.Value;
         s.CheckUpdates = tglAutoCheck.Checked;
         Settings.Migrate(s);
+        if (gridChanged) app.SetAlignToGrid(tglGrid.Checked);
         app.ApplySettings();
         Close();
     }

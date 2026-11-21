@@ -13,6 +13,11 @@ public sealed class Settings
     /// <summary>Adds "New shelf" to the desktop's own right-click menu while Shelves runs.</summary>
     public bool DesktopMenu { get; set; }
     public bool DoubleClickHides { get; set; } = true;
+    /// <summary>
+    /// Snap desktop icons to the grid. Shelves does this itself while it runs, because Windows' own "Align icons to
+    /// grid" will not let hidden icons stay off screen. Windows' switch is set to match when Shelves exits.
+    /// </summary>
+    public bool AlignToGrid { get; set; }
     /// <summary>How solid a shelf's colour is over the blurred wallpaper, 0 (clear glass) to 100 (solid).</summary>
     public int Opacity { get; set; } = 50;
     /// <summary>The colour of every shelf ("#RRGGBB"), or empty for the theme's own.</summary>

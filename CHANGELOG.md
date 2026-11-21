@@ -3,6 +3,11 @@
 All notable changes to Shelves are listed here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- "Align icons to grid" pulled every hidden icon back onto the desktop: Windows will not let icons sit off screen while it is on. Shelves now takes the setting over while it runs and snaps icons to the grid itself, and hands it back to Windows when it exits. It is in the tray menu and in Settings, General, and turning it on from the desktop's menu works too.
+
 ## [1.1.2] - 2026-11-21
 
 ### Fixed

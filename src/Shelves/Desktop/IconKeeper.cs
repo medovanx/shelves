@@ -111,6 +111,77 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     }
 
     /// <summary>
+    /// Snaps every visible icon to the desktop grid, as Windows' "Align icons to grid" does: icons already on a cell
+    /// keep it, the others go to the nearest free cell on their monitor. Returns how many moved.
+    /// </summary>
+    public int SnapVisible()
+    {
+        if (!view.Attached || Paused) return 0;
+        var sp = view.Spacing;
+        var o = view.Origin;
+        int w = Math.Max(sp.Width, 1), h = Math.Max(sp.Height, 1);
+        var visible = view.Items().Where(i => !DesktopView.IsParked(i.Pos)).ToList();
+        var taken = new HashSet<Pt>();
+        var loose = new List<DesktopItem>();
+        foreach (var it in visible)
+        {
+            var c = NearestCell(it.Pos, o, w, h, out _);
+            if (c == it.Pos && taken.Add(c)) continue; // on a cell already
+            loose.Add(it);
+        }
+        int moved = 0;
+        foreach (var it in loose)
+        {
+            var c = NearestCell(it.Pos, o, w, h, out var area);
+            var to = FreeCellNear(c, area, o, w, h, taken);
+            taken.Add(to);
+            if (to == it.Pos) continue;
+            view.Move(it.Index, to);
+            moved++;
+        }
+        return moved;
+    }
+
+    /// <summary>The grid cell nearest a list-view position, on the monitor it is on; Explorer's grid starts 11 px in and 2 px down.</summary>
+    static Pt NearestCell(Pt p, Point origin, int w, int h, out Rectangle area)
+    {
+        var center = new Point(origin.X + p.X + w / 2, origin.Y + p.Y + h / 2);
+        area = Screen.FromPoint(center).WorkingArea;
+        int x0 = area.Left - origin.X + 11, y0 = area.Top - origin.Y + 2;
+        int cols = Math.Max(1, (area.Width - 11) / w), rows = Math.Max(1, (area.Height - 2) / h);
+        int col = Math.Clamp((int)Math.Round((p.X - x0) / (double)w), 0, cols - 1);
+        int row = Math.Clamp((int)Math.Round((p.Y - y0) / (double)h), 0, rows - 1);
+        return new Pt(x0 + col * w, y0 + row * h);
+    }
+
+    /// <summary>The free cell closest to <paramref name="c"/> on the same monitor (rings outward), or <paramref name="c"/> itself if all are taken.</summary>
+    static Pt FreeCellNear(Pt c, Rectangle area, Point origin, int w, int h, HashSet<Pt> taken)
+    {
+        if (!taken.Contains(c)) return c;
+        int x0 = area.Left - origin.X + 11, y0 = area.Top - origin.Y + 2;
+        int cols = Math.Max(1, (area.Width - 11) / w), rows = Math.Max(1, (area.Height - 2) / h);
+        int c0 = (c.X - x0) / w, r0 = (c.Y - y0) / h;
+        for (int ring = 1; ring < Math.Max(cols, rows); ring++)
+        {
+            Pt? best = null;
+            double bestD = double.MaxValue;
+            for (int dc = -ring; dc <= ring; dc++)
+                for (int dr = -ring; dr <= ring; dr++)
+                {
+                    if (Math.Max(Math.Abs(dc), Math.Abs(dr)) != ring) continue;
+                    int col = c0 + dc, row = r0 + dr;
+                    if (col < 0 || row < 0 || col >= cols || row >= rows) continue;
+                    var p = new Pt(x0 + col * w, y0 + row * h);
+                    if (taken.Contains(p)) continue;
+                    double d = Math.Pow(dc * w, 2) + Math.Pow(dr * h, 2);
+                    if (d < bestD) { bestD = d; best = p; }
+                }
+            if (best is { } found) return found;
+        }
+        return c;
+    }
+
+    /// <summary>
     /// True when a saved list-view position still lands on a monitor. Monitors come and go (and the list view's
     /// origin moves with the leftmost one), so an old position can point off screen; such icons get a free spot.
     /// </summary>

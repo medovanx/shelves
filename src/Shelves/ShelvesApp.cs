@@ -135,7 +135,9 @@ sealed class ShelvesApp : ApplicationContext
             View.SetFolderFlags(DesktopView.FWF_AUTOARRANGE, 0);
             tray.ShowBalloonTip(6000, L.T("AppName"), L.T("AutoArrangeOff"), ToolTipIcon.Info);
         }
+        TakeOverGrid();
         Keeper.Sync();
+        if (Settings.AlignToGrid) Keeper.SnapVisible();
         var present = new HashSet<string>(Keeper.Last.Select(i => i.Name), StringComparer.OrdinalIgnoreCase);
         if (Health.LooksScrambled(Layout, present))
         {
@@ -162,7 +164,14 @@ sealed class ShelvesApp : ApplicationContext
             bool fixedNow = Keeper.Check();
             // Drawing comes back as soon as the hidden icons are parked again, and in any case within 200 ms.
             if (frozen && (fixedNow || sw.ElapsedMilliseconds > 200)) { Thaw(lv); frozen = false; }
-            if (sw.ElapsedMilliseconds > 700) { t.Stop(); t.Dispose(); if (frozen) Thaw(lv); }
+            if (sw.ElapsedMilliseconds > 700)
+            {
+                t.Stop();
+                t.Dispose();
+                if (frozen) Thaw(lv);
+                // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
+                if (Settings.AlignToGrid) Keeper.SnapVisible();
+            }
         };
         t.Start();
     }
@@ -203,9 +212,36 @@ sealed class ShelvesApp : ApplicationContext
     void Tick()
     {
         if (!View.Attached) { if (!exiting) Attach(); return; }
-        Keeper.Check();
+        // "Align icons to grid" turned on from the desktop's menu: Shelves takes it over (see TakeOverGrid).
+        if (TakeOverGrid()) { Keeper.Sync(); Keeper.SnapVisible(); }
+        if (Keeper.Check() && Settings.AlignToGrid) Keeper.SnapVisible();
         // While the desktop is in front (Show desktop), keep the shelves above it.
         if (DesktopInFront()) PlaceAll();
+    }
+
+    /// <summary>
+    /// Windows' "Align icons to grid" will not let any icon sit off screen, so with it on Shelves cannot hide icons.
+    /// When it is on, Shelves turns it off and snaps icons to the grid itself instead; Windows' switch is set back
+    /// to match Shelves' setting when Shelves exits. Returns true when it just took the switch over.
+    /// </summary>
+    bool TakeOverGrid()
+    {
+        if (ShotMode || (View.FolderFlags & DesktopView.FWF_SNAPTOGRID) == 0) return false;
+        View.SetFolderFlags(DesktopView.FWF_SNAPTOGRID, 0);
+        if (!Settings.AlignToGrid)
+        {
+            Settings.AlignToGrid = true;
+            SaveSettings();
+        }
+        return true;
+    }
+
+    /// <summary>Turns Shelves' own grid snapping on or off (tray menu, settings).</summary>
+    public void SetAlignToGrid(bool on)
+    {
+        Settings.AlignToGrid = on;
+        SaveSettings();
+        if (on) Keeper.SnapVisible();
     }
 
     static bool DesktopInFront() => Native.ClassOf(Native.GetForegroundWindow()) is "Progman" or "WorkerW" or "SysListView32" or "SHELLDLL_DefView";
@@ -543,6 +579,9 @@ sealed class ShelvesApp : ApplicationContext
         if (FencesReader.Available()) m.Items.Add(Item(L.T("ImportFences"), Art.IconAdd, ImportFences));
         m.Items.Add(Item(L.T("ImportFencesFile"), Art.IconOpen, ImportFencesBackup));
         m.Items.Add(new ToolStripSeparator());
+        var grid = new ToolStripMenuItem(L.T("AlignToGrid")) { Checked = Settings.AlignToGrid };
+        grid.Click += (_, _) => SetAlignToGrid(!Settings.AlignToGrid);
+        m.Items.Add(grid);
         var startup = new ToolStripMenuItem(L.T("StartWithWindows")) { Checked = Settings.StartWithWindows };
         startup.Click += (_, _) =>
         {
@@ -624,6 +663,8 @@ sealed class ShelvesApp : ApplicationContext
                 Thaw(View.ListView);
                 Native.ShowWindow(View.ListView, 5);
                 if (autoArrangeWasOn) View.SetFolderFlags(DesktopView.FWF_AUTOARRANGE, DesktopView.FWF_AUTOARRANGE);
+                // Hand grid alignment back to Windows, now that no icon needs to be off screen.
+                if (Settings.AlignToGrid) View.SetFolderFlags(DesktopView.FWF_SNAPTOGRID, DesktopView.FWF_SNAPTOGRID);
             }
         }
         catch (Exception ex) { Log.Error(ex); }

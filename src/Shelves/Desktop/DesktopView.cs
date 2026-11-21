@@ -217,7 +217,7 @@ sealed class DesktopView : IDisposable
         }
     }
 
-    public const uint FWF_AUTOARRANGE = 0x1, FWF_SNAPTOGRID = 0x80000;
+    public const uint FWF_AUTOARRANGE = 0x1, FWF_SNAPTOGRID = 0x4;
 
     public uint FolderFlags
     {
