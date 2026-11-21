@@ -72,7 +72,12 @@ sealed class ShelvesApp : ApplicationContext
         input.ListView = () => View.ListView;
         input.AnyShelved = () => Layout.Shelves.Any(s => s.AllItems.Any());
         input.DesktopRelease += CheckBurst;
-        input.IconPressed += () => { if (!Keeper.Paused) Keeper.RememberVisible(); };
+        input.IconPressed += p =>
+        {
+            // A new drag begins: finish the last drop's work first, so it never applies to this one.
+            endBurst?.Invoke();
+            if (!Keeper.Paused) Keeper.RememberVisible(p);
+        };
         input.DesktopRightClick += p => lastDesktopMenuAt = p;
 
         // Show desktop (Win+D) and clicks on the desktop raise it over everything: lift the shelves with it.
@@ -155,15 +160,32 @@ sealed class ShelvesApp : ApplicationContext
     /// does not report it. After a release on the desktop, check often for half a second, so shelved icons are
     /// hidden again within a frame or two instead of showing until the next one-second check.
     /// </summary>
+    Action? endBurst;
+
     void CheckBurst(bool iconDrag, bool frozen, Point press, Point release)
     {
+        endBurst?.Invoke();
+        if (!iconDrag) Keeper.ForgetVisible();
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var lv = View.ListView;
         var t = new System.Windows.Forms.Timer { Interval = 10 };
         long settledSince = -1;
         bool restored = false;
+        bool ended = false;
+        // Cut short by the next press or release: drawing comes back and the snapshot is dropped, nothing moves.
+        void Stop()
+        {
+            if (ended) return;
+            ended = true;
+            t.Stop();
+            t.Dispose();
+            if (frozen) { Thaw(lv); frozen = false; }
+            if (endBurst == Stop) endBurst = null;
+        }
+        endBurst = Stop;
         t.Tick += (_, _) =>
         {
+            if (ended) return;
             Keeper.Check();
             // Explorer pulls every hidden icon on screen while it handles a drop, a few at a time, and only takes
             // our moves once it is done. Drawing comes back once all are hidden again and stay hidden for 80 ms
@@ -184,18 +206,18 @@ sealed class ShelvesApp : ApplicationContext
             }
             if (sw.ElapsedMilliseconds > 1300)
             {
-                t.Stop();
-                t.Dispose();
-                if (frozen) Thaw(lv);
+                Stop();
                 // Re-hidden by index during the drop: confirm by name now that Explorer is idle.
                 if (Keeper.NeedsConfirm) Keeper.Sync();
-                if (!restored)
+                // Shelved icons still on screen: the restore and the grid would work from a half-shuffled desktop.
+                if (!restored && Keeper.AllHidden)
                 {
                     // Only an icon drag carries icons; a selection box or a click moves nothing to put back.
                     if (iconDrag) Keeper.RestoreShoved(press, release);
                     // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
                     if (Settings.AlignToGrid) Keeper.SnapVisible();
                 }
+                Keeper.ForgetVisible();
                 RefreshIconRects();
             }
         };

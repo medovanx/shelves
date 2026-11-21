@@ -30,7 +30,7 @@ sealed class DesktopInput : IDisposable
     /// <summary>The left button went up after being pressed on the desktop (an icon may have been dropped).</summary>
     public event Action<bool, bool, Point, Point>? DesktopRelease; // icon drag, frozen, press point, release point
     /// <summary>The left button went down on a desktop icon (a drag may follow).</summary>
-    public event Action? IconPressed;
+    public event Action<Point>? IconPressed;
     Point releasedAt;
     /// <summary>A plain right-click on the empty desktop (Explorer's menu opens there).</summary>
     public event Action<Point>? DesktopRightClick;
@@ -122,8 +122,8 @@ sealed class DesktopInput : IDisposable
                     pressedOnDesktop = IsDesktop(pt);
                     // An icon, not empty desktop: only dragging an icon ends in a drop that moves hidden icons.
                     pressedOnIcon = pressedOnDesktop && !emptyDesktop(pt);
-                    if (pressedOnIcon) invoker.BeginInvoke(() => IconPressed?.Invoke());
                     pressedAt = pt;
+                    if (pressedOnIcon) invoker.BeginInvoke(() => IconPressed?.Invoke(pt));
                     long now = Environment.TickCount64;
                     bool empty = emptyDesktop(pt);
                     int dx = Native.GetSystemMetrics(36 /* SM_CXDOUBLECLK */), dy = Native.GetSystemMetrics(37);

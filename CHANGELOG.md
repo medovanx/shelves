@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+- Fixed: moving icons twice in a row could throw them back toward where an earlier drag started, or far across the desktop. Each drag now only undoes its own drop, and the grid ignores shelved icons Explorer shows for a moment.
+
 ### Fixed
 - Dropping an icon froze the desktop for over a second: Shelves waited on Explorer for every hidden icon it put back, and redrew every shelf each time. A drop now settles in about a third of a second.
 - Moving icons on the desktop pushed other icons aside and could leave the moved ones somewhere else: while Windows handles a drop it pulls every hidden icon on screen and shuffles the rest to make room. Shelves now keeps the screen still through that, puts the dragged icons where they were dropped and every other icon back where it was.

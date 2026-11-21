@@ -119,16 +119,32 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         return true;
     }
 
-    Dictionary<string, Pt>? visibleBefore;
+    /// <summary>Where the desktop's own icons were when the button went down at <c>Press</c>.</summary>
+    sealed record Snapshot(Point Press, Dictionary<string, Pt> Pos);
+    Snapshot? visibleBefore;
 
-    /// <summary>Notes where every visible icon is, before a drag on the desktop (see <see cref="RestoreShoved"/>).</summary>
-    public void RememberVisible()
+    /// <summary>Names of every shelved icon: these belong off screen, whatever Explorer shows for a moment.</summary>
+    HashSet<string> ShelvedNames() => new(layout().AllShelved(), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The desktop's own (not shelved) icons that are on screen.</summary>
+    List<DesktopItem> DesktopIcons(IEnumerable<DesktopItem> items)
     {
-        if (!view.Attached) return;
-        visibleBefore = view.Items().Where(i => !DesktopView.IsParked(i.Pos))
-            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First().Pos, StringComparer.OrdinalIgnoreCase);
+        var shelved = ShelvedNames();
+        return items.Where(i => !DesktopView.IsParked(i.Pos) && !shelved.Contains(i.Name)).ToList();
     }
+
+    /// <summary>Notes where every desktop icon is when the button goes down at <paramref name="press"/> (see <see cref="RestoreShoved"/>).</summary>
+    public void RememberVisible(Point press)
+    {
+        visibleBefore = null;
+        if (!view.Attached) return;
+        visibleBefore = new Snapshot(press, DesktopIcons(view.Items())
+            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Pos, StringComparer.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Drops the snapshot: the drag it was taken for is over.</summary>
+    public void ForgetVisible() => visibleBefore = null;
 
     /// <summary>
     /// After a drop: while handling it, Explorer pulls every hidden icon on screen and pushes visible icons aside to
@@ -137,10 +153,15 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     /// </summary>
     public int RestoreShoved(Point press = default, Point release = default)
     {
-        var before = visibleBefore;
+        var snap = visibleBefore;
         visibleBefore = null;
-        if (before == null || !view.Attached || Paused) return 0;
-        var items = view.Items();
+        // Only the snapshot taken when this very drag began: one left from an earlier press would move icons by
+        // the wrong amount.
+        Shelves.Services.Log.Note($"[diag] restore press={press} release={release} snap={(snap == null ? "none" : snap.Press.ToString())}");
+        if (snap == null || snap.Press != press || !view.Attached || Paused) return 0;
+        var before = snap.Pos;
+        var shelved = ShelvedNames();
+        var items = view.Items().Where(i => !shelved.Contains(i.Name)).ToList();
         var selected = view.SelectedIndices();
         var sp = view.Spacing;
         var dropped = items.Where(i => selected.Contains(i.Index)).Select(i => i.Pos).ToList();
@@ -154,6 +175,10 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
                 if (!before.TryGetValue(it.Name, out var was)) continue;
                 var target = new Pt(was.X + dx, was.Y + dy);
                 if (target == it.Pos || DesktopView.IsParked(target)) continue;
+                // Explorer's shuffle nudges a dropped icon a cell or so at most. Anything further means the
+                // snapshot does not fit what happened: leave the icon where Explorer dropped it.
+                if (Math.Abs(target.X - it.Pos.X) > 2 * sp.Width || Math.Abs(target.Y - it.Pos.Y) > 2 * sp.Height) continue;
+                Shelves.Services.Log.Note($"[diag]  dragged {it.Name} {it.Pos.X},{it.Pos.Y} -> {target.X},{target.Y}");
                 view.Move(it.Index, target);
                 moved++;
             }
@@ -163,6 +188,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             if (!before.TryGetValue(it.Name, out var was) || was == it.Pos) continue;
             // The user dropped an icon onto this one's spot: leave it where Explorer moved it.
             if (dropped.Any(d => Math.Abs(d.X - was.X) < sp.Width / 2 && Math.Abs(d.Y - was.Y) < sp.Height / 2)) continue;
+            Shelves.Services.Log.Note($"[diag]  back {it.Name} {it.Pos.X},{it.Pos.Y} -> {was.X},{was.Y}");
             view.Move(it.Index, was);
             moved++;
         }
@@ -213,7 +239,9 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var sp = view.Spacing;
         var o = view.Origin;
         int w = Math.Max(sp.Width, 1), h = Math.Max(sp.Height, 1);
-        var visible = view.Items().Where(i => !DesktopView.IsParked(i.Pos)).ToList();
+        // Shelved icons Explorer has pulled on screen for a moment do not count: they are about to be hidden again,
+        // and taking their cells would throw dropped icons far away.
+        var visible = DesktopIcons(view.Items());
         var taken = new HashSet<Pt>();
         var loose = new List<DesktopItem>();
         foreach (var it in visible)
@@ -229,6 +257,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             var to = FreeCellNear(c, area, o, w, h, taken);
             taken.Add(to);
             if (to == it.Pos) continue;
+            Shelves.Services.Log.Note($"[diag]  snap {it.Name} {it.Pos.X},{it.Pos.Y} -> {to.X},{to.Y}");
             view.Move(it.Index, to);
             moved++;
         }
