@@ -20,6 +20,8 @@ sealed partial class DesktopLayer
     /// <summary>Set while a shelf's desktop icons are in a shell drag: dropped here, the shelf takes them out itself.</summary>
     public static bool ShelfDrag;
     Form? renameBox;
+    /// <summary>The icon being renamed: its label is not drawn while the name box covers it.</summary>
+    string? renamingName;
     readonly System.Windows.Forms.Timer typeTimer = new() { Interval = 1000 };
     string typed = "";
 
@@ -472,9 +474,21 @@ sealed partial class DesktopLayer
             TextAlign = HorizontalAlignment.Center,
             RightToLeft = L.Ar ? RightToLeft.Yes : RightToLeft.No,
             Location = Point.Empty,
+            // Long names wrap onto more lines, as in Explorer's box; Enter still finishes (see KeyDown).
+            Multiline = true,
+            WordWrap = true,
+            ScrollBars = ScrollBars.None,
         };
-        // Just the label's width (a little more) and one line of text, like Explorer's box.
-        int w = it.Box.Width + (int)(6 * s), h = tb.PreferredHeight;
+        // The label's width (a little more), as tall as the name needs.
+        int w = it.Box.Width + (int)(6 * s);
+        int lineH = tb.Font.Height;
+        int HeightFor(string t)
+        {
+            var size = TextRenderer.MeasureText(t.Length == 0 ? " " : t, tb.Font, new Size(w - (int)(8 * s), int.MaxValue),
+                TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl);
+            return Math.Min(size.Height, lineH * 6) + (int)(6 * s);
+        }
+        int h = HeightFor(text);
         tb.Size = new Size(w, h);
         var screen = new Rectangle(Screen.Bounds.X + it.Box.X - (w - it.Box.Width) / 2, Screen.Bounds.Y + (int)lr.Y - (int)(1 * s), w, h);
         var f = new Form
@@ -493,8 +507,12 @@ sealed partial class DesktopLayer
         {
             if (done) return;
             done = true;
-            string v = tb.Text.Trim();
+            string v = tb.Text.Replace("", "").Replace("
+", "").Trim();
             renameBox = null;
+            renamingName = null;
+            InvalidateName(name);
+            Render();
             f.Close();
             if (!ok || v.Length == 0 || v == text) return;
             using var g = ItemGroup.FromDesktop(app.View, [name]);
@@ -506,6 +524,16 @@ sealed partial class DesktopLayer
             else if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; Finish(false); }
         };
         tb.LostFocus += (_, _) => Finish(true);
+        tb.TextChanged += (_, _) =>
+        {
+            int nh = HeightFor(tb.Text);
+            if (nh == f.Height) return;
+            f.Height = nh;
+            tb.Height = nh;
+        };
+        renamingName = name;
+        InvalidateName(name);
+        Render();
         renameBox = f;
         f.Show(this);
         f.Bounds = screen; // after Show: a form shown first takes a minimum height of its own

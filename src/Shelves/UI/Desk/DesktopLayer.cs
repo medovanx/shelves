@@ -337,6 +337,7 @@ sealed partial class DesktopLayer : Form
             }
             if (link != null && ShellOps.IsLink(it.Name)) g.DrawImage(link, ir);
 
+            if (string.Equals(renamingName, it.Name, StringComparison.OrdinalIgnoreCase)) continue;
             if (shadows)
             {
                 g.DrawString(it.Label, font, shadowSoft, new RectangleF(lr.X + 1, lr.Y + 2, lr.Width, lr.Height), sf);
