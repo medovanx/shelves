@@ -172,7 +172,6 @@ sealed class ShelvesApp : ApplicationContext
         long settledSince = -1;
         bool restored = false;
         bool ended = false;
-        // Cut short by the next press or release: drawing comes back and the snapshot is dropped, nothing moves.
         void Stop()
         {
             if (ended) return;
@@ -180,9 +179,28 @@ sealed class ShelvesApp : ApplicationContext
             t.Stop();
             t.Dispose();
             if (frozen) { Thaw(lv); frozen = false; }
-            if (endBurst == Stop) endBurst = null;
+            if (endBurst == Finish) endBurst = null;
         }
-        endBurst = Stop;
+        // The drop's work, done once: undo Explorer's shuffle, snap to the grid, and learn where the icons are now,
+        // so a press on an icon that was just dropped counts as a press on an icon.
+        void Settle()
+        {
+            if (restored) return;
+            restored = true;
+            if (iconDrag) Keeper.RestoreShoved(press, release);
+            if (Settings.AlignToGrid) Keeper.SnapVisible();
+            RefreshIconRects();
+        }
+        // The next press or release comes before the drop is done: finish it now, before that one starts.
+        void Finish()
+        {
+            if (ended) return;
+            Stop();
+            if (Keeper.NeedsConfirm) Keeper.Sync();
+            Settle();
+            Keeper.ForgetVisible();
+        }
+        endBurst = Finish;
         t.Tick += (_, _) =>
         {
             if (ended) return;
@@ -190,16 +208,15 @@ sealed class ShelvesApp : ApplicationContext
             // Explorer pulls every hidden icon on screen while it handles a drop, a few at a time, and only takes
             // our moves once it is done. Drawing comes back once all are hidden again and stay hidden for 80 ms
             // (so a late batch does not show), and in any case within 1.2 s.
-            if (frozen)
+            if (!restored)
             {
                 if (!Keeper.AllHidden) settledSince = -1;
                 else if (settledSince < 0) settledSince = sw.ElapsedMilliseconds;
-                if ((settledSince >= 0 && sw.ElapsedMilliseconds - settledSince >= 80) || sw.ElapsedMilliseconds > 1200)
+                bool settled = settledSince >= 0 && sw.ElapsedMilliseconds - settledSince >= 80;
+                // Undo Explorer's shuffle before drawing comes back, so it is never seen.
+                if (settled) Settle();
+                if (frozen && (settled || sw.ElapsedMilliseconds > 1200))
                 {
-                    // Undo Explorer's shuffle before drawing comes back, so it is never seen.
-                    restored = true;
-                    if (iconDrag) Keeper.RestoreShoved(press, release);
-                    if (Settings.AlignToGrid) Keeper.SnapVisible();
                     Thaw(lv);
                     frozen = false;
                 }
@@ -210,13 +227,7 @@ sealed class ShelvesApp : ApplicationContext
                 // Re-hidden by index during the drop: confirm by name now that Explorer is idle.
                 if (Keeper.NeedsConfirm) Keeper.Sync();
                 // Shelved icons still on screen: the restore and the grid would work from a half-shuffled desktop.
-                if (!restored && Keeper.AllHidden)
-                {
-                    // Only an icon drag carries icons; a selection box or a click moves nothing to put back.
-                    if (iconDrag) Keeper.RestoreShoved(press, release);
-                    // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
-                    if (Settings.AlignToGrid) Keeper.SnapVisible();
-                }
+                if (Keeper.AllHidden) Settle();
                 Keeper.ForgetVisible();
                 RefreshIconRects();
             }
