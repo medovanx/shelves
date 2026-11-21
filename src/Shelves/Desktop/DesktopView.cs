@@ -15,6 +15,18 @@ sealed class DesktopView : IDisposable
 {
     /// <summary>Where hidden icons wait: far beyond any screen, inside the 16-bit range the list view accepts.</summary>
     public static readonly Pt Parked = new(30000, 30000);
+
+    /// <summary>
+    /// The off-screen spot for the n-th hidden icon. Each gets its own, a grid cell apart, because with "Align icons
+    /// to grid" on Explorer spreads icons that share a spot back onto the screen. Stays inside the 16-bit range the
+    /// list view accepts, and at or past 20000 so <see cref="IsParked"/> knows it.
+    /// </summary>
+    public static Pt ParkSlot(int n, Size spacing)
+    {
+        int w = Math.Max(spacing.Width, 40), h = Math.Max(spacing.Height, 40);
+        int perRow = Math.Max(1, (32000 - 20000) / w);
+        return new Pt(20000 + n % perRow * w, 20000 + n / perRow * h);
+    }
     public static bool IsParked(Pt p) => p.X >= 20000 || p.Y >= 20000;
 
     IFolderView2? view;

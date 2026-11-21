@@ -3,6 +3,12 @@
 All notable changes to Shelves are listed here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Moving an icon on the desktop could make another icon jump to a corner, or the dragged one snap back: Shelves sometimes re-hid the wrong icon after files were added or removed.
+- "Align icons to grid" can stay on: hidden icons each get their own spot, so Windows no longer spreads them back over the desktop.
+
 ## [1.1.1] - 2026-11-18
 
 ### Fixed
