@@ -28,7 +28,10 @@ sealed class DesktopInput : IDisposable
     public event Action<Rectangle, Point>? BoxDrawn;
     public event Action? DesktopDoubleClick;
     /// <summary>The left button went up after being pressed on the desktop (an icon may have been dropped).</summary>
-    public event Action<bool>? DesktopRelease;
+    public event Action<bool, Point, Point>? DesktopRelease; // frozen, press point, release point
+    /// <summary>The left button went down on a desktop icon (a drag may follow).</summary>
+    public event Action? IconPressed;
+    Point releasedAt;
     /// <summary>A plain right-click on the empty desktop (Explorer's menu opens there).</summary>
     public event Action<Point>? DesktopRightClick;
     /// <summary>Set by the app: the desktop list view, frozen for the moment a dragged icon is dropped.</summary>
@@ -109,7 +112,8 @@ sealed class DesktopInput : IDisposable
                         // while it handles the drop. LockWindowUpdate takes effect at once and only we lift it.
                         bool frozen = dragged && pressedOnIcon && AnyShelved() && ListView() is var lv && lv != IntPtr.Zero
                                       && Native.LockWindowUpdate(lv);
-                        invoker.BeginInvoke(() => DesktopRelease?.Invoke(frozen));
+                        var from = pressedAt; var to = pt;
+                        invoker.BeginInvoke(() => DesktopRelease?.Invoke(frozen, from, to));
                     }
                     break;
                 case 0x201: // WM_LBUTTONDOWN
@@ -117,6 +121,7 @@ sealed class DesktopInput : IDisposable
                     pressedOnDesktop = IsDesktop(pt);
                     // An icon, not empty desktop: only dragging an icon ends in a drop that moves hidden icons.
                     pressedOnIcon = pressedOnDesktop && !emptyDesktop(pt);
+                    if (pressedOnIcon) invoker.BeginInvoke(() => IconPressed?.Invoke());
                     pressedAt = pt;
                     long now = Environment.TickCount64;
                     bool empty = emptyDesktop(pt);

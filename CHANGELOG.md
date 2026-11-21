@@ -6,6 +6,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ## [Unreleased]
 
 ### Fixed
+- Moving icons on the desktop pushed other icons aside and could leave the moved ones somewhere else: while Windows handles a drop it pulls every hidden icon on screen and shuffles the rest to make room. Shelves now keeps the screen still through that, puts the dragged icons where they were dropped and every other icon back where it was.
 - Dragging an icon out of a shelf onto the desktop asked about a file that "already exists": Windows treated it as a file move. Shelves now moves icons to the desktop or into another shelf itself, and only hands the drag to Windows over another app.
 - "Align icons to grid" pulled every hidden icon back onto the desktop: Windows will not let icons sit off screen while it is on. Shelves now takes the setting over while it runs and snaps icons to the grid itself, and hands it back to Windows when it exits. It is in the tray menu and in Settings, General, and turning it on from the desktop's menu works too.
 

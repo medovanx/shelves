@@ -177,6 +177,21 @@ sealed class DesktopView : IDisposable
         return new Pt(p.X, p.Y);
     }
 
+    /// <summary>List-view indices of the selected icons (the ones a drag carries).</summary>
+    public HashSet<int> SelectedIndices()
+    {
+        var res = new HashSet<int>();
+        if (ListView == IntPtr.Zero) return res;
+        int i = -1;
+        for (int guard = 0; guard < 10000; guard++)
+        {
+            i = (int)Send(0x100C /* LVM_GETNEXTITEM */, i, (IntPtr)2 /* LVNI_SELECTED */);
+            if (i < 0) break;
+            res.Add(i);
+        }
+        return res;
+    }
+
     public void Move(int index, Pt p) =>
         Send(0x100F /* LVM_SETITEMPOSITION */, index, (IntPtr)(((p.Y & 0xFFFF) << 16) | (p.X & 0xFFFF)));
 

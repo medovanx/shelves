@@ -79,6 +79,59 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         return true;
     }
 
+    Dictionary<string, Pt>? visibleBefore;
+
+    /// <summary>Notes where every visible icon is, before a drag on the desktop (see <see cref="RestoreShoved"/>).</summary>
+    public void RememberVisible()
+    {
+        if (!view.Attached) return;
+        visibleBefore = view.Items().Where(i => !DesktopView.IsParked(i.Pos))
+            .GroupBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().Pos, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// After a drop: while handling it, Explorer pulls every hidden icon on screen and pushes visible icons aside to
+    /// make room. Puts each visible icon that was not dragged (not selected) back where it was before the drag,
+    /// unless a dropped icon now sits there. Returns how many it moved back.
+    /// </summary>
+    public int RestoreShoved(Point press = default, Point release = default)
+    {
+        var before = visibleBefore;
+        visibleBefore = null;
+        if (before == null || !view.Attached || Paused) return 0;
+        var items = view.Items();
+        var selected = view.SelectedIndices();
+        var sp = view.Spacing;
+        var dropped = items.Where(i => selected.Contains(i.Index)).Select(i => i.Pos).ToList();
+        int moved = 0;
+        // The dragged icons go where the mouse took them: their old spot moved by the drag, which is where Explorer
+        // puts them too unless its shuffle pushed them elsewhere.
+        int dx = release.X - press.X, dy = release.Y - press.Y;
+        if (dx != 0 || dy != 0)
+            foreach (var it in items.Where(i => selected.Contains(i.Index)))
+            {
+                if (!before.TryGetValue(it.Name, out var was)) continue;
+                var target = new Pt(was.X + dx, was.Y + dy);
+                if (target == it.Pos || DesktopView.IsParked(target)) continue;
+                view.Move(it.Index, target);
+                moved++;
+            }
+        foreach (var it in items)
+        {
+            if (selected.Contains(it.Index) || DesktopView.IsParked(it.Pos)) continue;
+            if (!before.TryGetValue(it.Name, out var was) || was == it.Pos) continue;
+            // The user dropped an icon onto this one's spot: leave it where Explorer moved it.
+            if (dropped.Any(d => Math.Abs(d.X - was.X) < sp.Width / 2 && Math.Abs(d.Y - was.Y) < sp.Height / 2)) continue;
+            view.Move(it.Index, was);
+            moved++;
+        }
+        return moved;
+    }
+
+    /// <summary>True when every shelved icon found at the last sync is hidden right now (cheap: list-view messages only).</summary>
+    public bool AllHidden => view.Attached && view.Positions().Count(DesktopView.IsParked) >= lastParked;
+
     /// <summary>Shows one icon again: at <paramref name="listViewPos"/> if given (a drop point), else where it was.</summary>
     public void Unhide(string name, Pt? listViewPos = null)
     {

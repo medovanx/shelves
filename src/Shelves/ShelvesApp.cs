@@ -72,6 +72,7 @@ sealed class ShelvesApp : ApplicationContext
         input.ListView = () => View.ListView;
         input.AnyShelved = () => Layout.Shelves.Any(s => s.AllItems.Any());
         input.DesktopRelease += CheckBurst;
+        input.IconPressed += () => { if (!Keeper.Paused) Keeper.RememberVisible(); };
         input.DesktopRightClick += p => lastDesktopMenuAt = p;
 
         // Show desktop (Win+D) and clicks on the desktop raise it over everything: lift the shelves with it.
@@ -154,23 +155,44 @@ sealed class ShelvesApp : ApplicationContext
     /// does not report it. After a release on the desktop, check often for half a second, so shelved icons are
     /// hidden again within a frame or two instead of showing until the next one-second check.
     /// </summary>
-    void CheckBurst(bool frozen)
+    void CheckBurst(bool frozen, Point press, Point release)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var lv = View.ListView;
         var t = new System.Windows.Forms.Timer { Interval = 10 };
+        long settledSince = -1;
+        bool restored = false;
         t.Tick += (_, _) =>
         {
-            bool fixedNow = Keeper.Check();
-            // Drawing comes back as soon as the hidden icons are parked again, and in any case within 200 ms.
-            if (frozen && (fixedNow || sw.ElapsedMilliseconds > 200)) { Thaw(lv); frozen = false; }
-            if (sw.ElapsedMilliseconds > 700)
+            Keeper.Check();
+            // Explorer pulls every hidden icon on screen while it handles a drop, a few at a time, and only takes
+            // our moves once it is done. Drawing comes back once all are hidden again and stay hidden for 80 ms
+            // (so a late batch does not show), and in any case within 1.2 s.
+            if (frozen)
+            {
+                if (!Keeper.AllHidden) settledSince = -1;
+                else if (settledSince < 0) settledSince = sw.ElapsedMilliseconds;
+                if ((settledSince >= 0 && sw.ElapsedMilliseconds - settledSince >= 80) || sw.ElapsedMilliseconds > 1200)
+                {
+                    // Undo Explorer's shuffle before drawing comes back, so it is never seen.
+                    restored = true;
+                    Keeper.RestoreShoved(press, release);
+                    if (Settings.AlignToGrid) Keeper.SnapVisible();
+                    Thaw(lv);
+                    frozen = false;
+                }
+            }
+            if (sw.ElapsedMilliseconds > 1300)
             {
                 t.Stop();
                 t.Dispose();
                 if (frozen) Thaw(lv);
-                // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
-                if (Settings.AlignToGrid) Keeper.SnapVisible();
+                if (!restored)
+                {
+                    Keeper.RestoreShoved(press, release);
+                    // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
+                    if (Settings.AlignToGrid) Keeper.SnapVisible();
+                }
             }
         };
         t.Start();
