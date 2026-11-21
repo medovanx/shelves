@@ -287,12 +287,12 @@ sealed partial class DesktopLayer : Form
             // Faintly drawn everywhere (alpha 1 of 255, invisible): a layered window takes clicks only where it draws.
             using (var bg = new SolidBrush(Color.FromArgb(1, 0, 0, 0))) g.FillRectangle(bg, area);
             g.CompositingMode = CompositingMode.SourceOver;
-            Paint(g, area);
+            PaintIcons(g, area);
         }
         surface.Push(Handle, b.Location, area);
     }
 
-    void Paint(Graphics g, Rectangle area)
+    void PaintIcons(Graphics g, Rectangle area)
     {
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -429,7 +429,7 @@ sealed partial class DesktopLayer : Form
                 var savedHover = hoverName;
                 icons = list;
                 hoverName = null;
-                try { Paint(g, new Rectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height)); }
+                try { PaintIcons(g, new Rectangle(bounds.X, bounds.Y, bounds.Width, bounds.Height)); }
                 finally { icons = saved; hoverName = savedHover; }
             }
             using var g2 = Graphics.FromImage(bmp);
