@@ -155,7 +155,7 @@ sealed class ShelvesApp : ApplicationContext
     /// does not report it. After a release on the desktop, check often for half a second, so shelved icons are
     /// hidden again within a frame or two instead of showing until the next one-second check.
     /// </summary>
-    void CheckBurst(bool frozen, Point press, Point release)
+    void CheckBurst(bool iconDrag, bool frozen, Point press, Point release)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var lv = View.ListView;
@@ -176,7 +176,7 @@ sealed class ShelvesApp : ApplicationContext
                 {
                     // Undo Explorer's shuffle before drawing comes back, so it is never seen.
                     restored = true;
-                    Keeper.RestoreShoved(press, release);
+                    if (iconDrag) Keeper.RestoreShoved(press, release);
                     if (Settings.AlignToGrid) Keeper.SnapVisible();
                     Thaw(lv);
                     frozen = false;
@@ -189,10 +189,12 @@ sealed class ShelvesApp : ApplicationContext
                 if (frozen) Thaw(lv);
                 if (!restored)
                 {
-                    Keeper.RestoreShoved(press, release);
+                    // Only an icon drag carries icons; a selection box or a click moves nothing to put back.
+                    if (iconDrag) Keeper.RestoreShoved(press, release);
                     // An icon was dropped: put it on the grid, as Windows' "Align icons to grid" would.
                     if (Settings.AlignToGrid) Keeper.SnapVisible();
                 }
+                RefreshIconRects();
             }
         };
         t.Start();
@@ -237,6 +239,7 @@ sealed class ShelvesApp : ApplicationContext
         // "Align icons to grid" turned on from the desktop's menu: Shelves takes it over (see TakeOverGrid).
         if (TakeOverGrid()) { Keeper.Sync(); Keeper.SnapVisible(); }
         if (Keeper.Check() && Settings.AlignToGrid) Keeper.SnapVisible();
+        RefreshIconRects();
         // While the desktop is in front (Show desktop), keep the shelves above it.
         if (DesktopInFront()) PlaceAll();
     }
@@ -292,13 +295,23 @@ sealed class ShelvesApp : ApplicationContext
             _ = CheckUpdatesQuietly();
     }
 
+    /// <summary>
+    /// Where the visible icons are on screen, so a press on the desktop can tell an icon from empty space (an icon
+    /// drag gets the freeze and the undo of Explorer's shuffle). Read straight from the list view, so it follows
+    /// icons the user moved since the last full sync; refreshed every second and after every drop.
+    /// </summary>
     void RefreshIconRects()
     {
+        if (!View.Attached) return;
         var origin = View.Origin;
-        iconRects = Keeper.Last
-            .Where(i => !DesktopView.IsParked(i.Pos))
-            .Select(i => View.Bounds(i.Index) is { } r ? r with { X = r.X + origin.X, Y = r.Y + origin.Y } : Rectangle.Empty)
-            .Where(r => !r.IsEmpty).ToList();
+        var positions = View.Positions();
+        var rects = new List<Rectangle>(positions.Length);
+        for (int i = 0; i < positions.Length; i++)
+        {
+            if (DesktopView.IsParked(positions[i])) continue;
+            if (View.Bounds(i) is { } r) rects.Add(r with { X = r.X + origin.X, Y = r.Y + origin.Y });
+        }
+        iconRects = rects;
     }
 
     /// <summary>True when the point is on Explorer's desktop and on no icon (and no icon is being renamed).</summary>
