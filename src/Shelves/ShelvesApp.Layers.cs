@@ -172,10 +172,24 @@ sealed partial class ShelvesApp
         return b;
     }
 
+    long cutAt;
+
+    /// <summary>
+    /// The clipboard changed: anything copied or cut after a cut replaces it, so the faded icons look normal
+    /// again, as in Explorer. The cut's own clipboard change (right after it) is not one of those.
+    /// </summary>
+    public void ClipboardChanged()
+    {
+        if (CutNames.Count == 0 || Environment.TickCount64 - cutAt < 1000) return;
+        CutNames.Clear();
+        foreach (var l in Layers) l.RenderAll();
+    }
+
     public void MarkCut(IEnumerable<string> names)
     {
         CutNames.Clear();
         CutNames.UnionWith(names);
+        cutAt = Environment.TickCount64;
         foreach (var l in Layers) l.RenderAll();
     }
 

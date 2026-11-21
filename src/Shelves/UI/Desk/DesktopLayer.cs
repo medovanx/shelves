@@ -65,7 +65,10 @@ sealed partial class DesktopLayer : Form
         Native.DwmSetWindowAttribute(Handle, 2 /* DWMWA_NCRENDERING_POLICY */, ref disabled, sizeof(int));
         PlaceAboveDesktop();
         RenderAll();
+        AddClipboardFormatListener(Handle);
     }
+
+    [DllImport("user32.dll")] static extern bool AddClipboardFormatListener(IntPtr hwnd);
 
     protected override void Dispose(bool disposing)
     {
@@ -120,6 +123,8 @@ sealed partial class DesktopLayer : Form
             }
             Marshal.StructureToPtr(wp, m.LParam, false);
         }
+        else if (m.Msg == 0x31D /* WM_CLIPBOARDUPDATE */)
+            app.ClipboardChanged();
         else if (m.Msg == Native.WM_DPICHANGED)
         {
             IconCache.Forget();
