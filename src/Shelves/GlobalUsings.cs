@@ -9,3 +9,4 @@ global using Shelves.DevTools;
 global using Shelves.Localization;
 global using Shelves.UI;
 global using Shelves.UI.Shelf;
+global using Shelves.UI.Desk;

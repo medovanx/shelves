@@ -104,6 +104,22 @@ sealed class DesktopView : IDisposable
 
     public void Dispose() => Detach();
 
+    /// <summary>The desktop's view as an IShellView, for its background menu.</summary>
+    public IShellView? ShellView => view as IShellView;
+
+    /// <summary>The size Explorer draws desktop icons at (View, Large/Medium/Small, or Ctrl+wheel), in pixels.</summary>
+    public int IconSize
+    {
+        get
+        {
+            try { if (view == null) return 0; view.GetViewModeAndIconSize(out _, out int size); return size; }
+            catch (Exception ex) when (ex is COMException or InvalidCastException) { return 0; }
+        }
+    }
+
+    /// <summary>Ends an in-place rename Explorer started (after "New folder" it waits for a name in its own list).</summary>
+    public void CancelEdit() { if (ListView != IntPtr.Zero) Send(0x10B3 /* LVM_CANCELEDITLABEL */, 0, 0); }
+
     /// <summary>The desktop's shell folder (user and public desktops merged), for context menus and drags.</summary>
     public IShellFolder? Folder => folder;
 
@@ -240,6 +256,17 @@ sealed class DesktopView : IDisposable
     {
         if (buffer == IntPtr.Zero) return null;
         var r = new Native.RECT { Left = 0 /* LVIR_BOUNDS */ };
+        WriteProcessMemory(process, buffer, ref r, 16, out _);
+        if (Send(0x100E /* LVM_GETITEMRECT */, index, buffer) == IntPtr.Zero) return null;
+        ReadProcessMemory(process, buffer, out r, 16, out _);
+        return Rectangle.FromLTRB(r.Left, r.Top, r.Right, r.Bottom);
+    }
+
+    /// <summary>One of the item's rectangles (0 bounds, 1 icon, 2 label) in list-view client coordinates, or null.</summary>
+    public Rectangle? ItemRect(int index, int code)
+    {
+        if (buffer == IntPtr.Zero) return null;
+        var r = new Native.RECT { Left = code };
         WriteProcessMemory(process, buffer, ref r, 16, out _);
         if (Send(0x100E /* LVM_GETITEMRECT */, index, buffer) == IntPtr.Zero) return null;
         ReadProcessMemory(process, buffer, out r, 16, out _);

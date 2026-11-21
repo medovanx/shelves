@@ -265,7 +265,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     }
 
     /// <summary>The grid cell nearest a list-view position, on the monitor it is on; Explorer's grid starts 11 px in and 2 px down.</summary>
-    static Pt NearestCell(Pt p, Point origin, int w, int h, out Rectangle area)
+    public static Pt NearestCell(Pt p, Point origin, int w, int h, out Rectangle area)
     {
         var center = new Point(origin.X + p.X + w / 2, origin.Y + p.Y + h / 2);
         area = Screen.FromPoint(center).WorkingArea;
@@ -277,7 +277,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
     }
 
     /// <summary>The free cell closest to <paramref name="c"/> on the same monitor (rings outward), or <paramref name="c"/> itself if all are taken.</summary>
-    static Pt FreeCellNear(Pt c, Rectangle area, Point origin, int w, int h, HashSet<Pt> taken)
+    public static Pt FreeCellNear(Pt c, Rectangle area, Point origin, int w, int h, HashSet<Pt> taken)
     {
         if (!taken.Contains(c)) return c;
         int x0 = area.Left - origin.X + 11, y0 = area.Top - origin.Y + 2;

@@ -224,10 +224,13 @@ sealed partial class ShelfWindow : Form
         Native.SetWindowPos(Handle, after, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
     }
 
-    /// <summary>The window to insert after so the shelf sits just above the desktop (Progman).</summary>
+    /// <summary>Set by the app: the window shelves sit right above (Progman, or the icons Shelves draws over it).</summary>
+    public static Func<IntPtr>? Floor;
+
+    /// <summary>The window to insert after so the shelf sits just above the desktop (Progman, and Shelves' icon layer).</summary>
     static IntPtr AboveDesktop()
     {
-        var progman = Native.FindWindow("Progman", null);
+        var progman = Floor?.Invoke() ?? Native.FindWindow("Progman", null);
         if (progman == IntPtr.Zero) return Native.HWND_BOTTOM;
         var prev = GetWindow(progman, 3 /* GW_HWNDPREV */);
         return prev == IntPtr.Zero ? (IntPtr)0 /* HWND_TOP */ : prev;

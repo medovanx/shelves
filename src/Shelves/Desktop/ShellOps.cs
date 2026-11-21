@@ -102,6 +102,36 @@ static class ShellOps
     {
         Guid iid = Shell32.IID_IContextMenu;
         items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
+        return RunMenu(hwnd, obj, screen, 0x10 /* CMF_CANRENAME */ | (extended ? 0x100u /* CMF_EXTENDEDVERBS */ : 0));
+    }
+
+    /// <summary>
+    /// The desktop's own background menu (View, Sort by, Refresh, Paste, New, Display settings, Personalize and
+    /// any entries added to it), taken from Explorer's desktop view and shown at a screen point. Returns the verb run.
+    /// </summary>
+    public static string? BackgroundMenu(IntPtr hwnd, DesktopView view, Point screen, bool extended)
+    {
+        if (view.ShellView is not { } sv) return null;
+        Guid iid = Shell32.IID_IContextMenu;
+        try { sv.GetItemObject(0 /* SVGIO_BACKGROUND */, ref iid, out var obj); return RunMenu(hwnd, obj, screen, extended ? 0x100u : 0); }
+        catch (Exception ex) when (ex is COMException or InvalidCastException) { Log.Error(ex); return null; }
+    }
+
+    /// <summary>Runs a verb from the desktop's background menu ("paste", "refresh") without showing it.</summary>
+    public static void BackgroundVerb(IntPtr hwnd, DesktopView view, string verb)
+    {
+        if (view.ShellView is not { } sv) return;
+        Guid iid = Shell32.IID_IContextMenu;
+        try
+        {
+            sv.GetItemObject(0, ref iid, out var obj);
+            InvokeVerb(hwnd, (IContextMenu)obj, verb, 0);
+        }
+        catch (Exception ex) when (ex is COMException or InvalidCastException) { Log.Error(ex); }
+    }
+
+    static string? RunMenu(IntPtr hwnd, object obj, Point screen, uint flags)
+    {
         var cm = (IContextMenu)obj;
         menu2 = obj as IContextMenu2;
         menu3 = obj as IContextMenu3;
@@ -109,7 +139,6 @@ static class ShellOps
         try
         {
             const uint first = 1, last = 0x7FFF;
-            uint flags = 0x10 /* CMF_CANRENAME */ | (extended ? 0x100u /* CMF_EXTENDEDVERBS */ : 0);
             if (cm.QueryContextMenu(hmenu, 0, first, last, flags) < 0) return null;
             int cmd = Shell32.TrackPopupMenuEx(hmenu, 0x100 /* TPM_RETURNCMD */ | 0x2 /* TPM_RIGHTBUTTON */, screen.X, screen.Y, hwnd, IntPtr.Zero);
             if (cmd <= 0) return null;
@@ -137,11 +166,15 @@ static class ShellOps
     }
 
     /// <summary>Runs one verb ("delete", "properties", ...) on the items without showing a menu.</summary>
-    public static void Invoke(IntPtr hwnd, ItemGroup items, string verb)
+    public static void Invoke(IntPtr hwnd, ItemGroup items, string verb, bool shift = false)
     {
         Guid iid = Shell32.IID_IContextMenu;
         items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
-        var cm = (IContextMenu)obj;
+        InvokeVerb(hwnd, (IContextMenu)obj, verb, shift ? 0x10000000u /* CMIC_MASK_SHIFT_DOWN */ : 0);
+    }
+
+    static void InvokeVerb(IntPtr hwnd, IContextMenu cm, string verb, uint mask)
+    {
         var hmenu = Shell32.CreatePopupMenu();
         var ansi = Marshal.StringToHGlobalAnsi(verb);
         var wide = Marshal.StringToHGlobalUni(verb);
@@ -151,7 +184,7 @@ static class ShellOps
             var info = new CMINVOKECOMMANDINFOEX
             {
                 cbSize = Marshal.SizeOf<CMINVOKECOMMANDINFOEX>(),
-                fMask = 0x4000,
+                fMask = 0x4000 | mask,
                 hwnd = hwnd,
                 lpVerb = ansi,
                 lpVerbW = wide,
@@ -179,6 +212,91 @@ static class ShellOps
         finally { Marshal.FreeHGlobal(buf); }
     }
 
+    /// <summary>
+    /// The shell's drop target for an item (a folder, the Recycle Bin, a program) or, for a folder path, the
+    /// folder itself: files dropped through it are moved, copied, linked or opened exactly as Explorer would.
+    /// </summary>
+    public static IShellDropTarget? DropTarget(IntPtr hwnd, string parsingName)
+    {
+        if (Shell32.SHParseDisplayName(parsingName, IntPtr.Zero, out var pidl, 0, out _) != 0) return null;
+        try
+        {
+            Guid iidf = Shell32.IID_IShellFolder;
+            if (Shell32.SHBindToParent(pidl, ref iidf, out var f, out var child) != 0) return null;
+            var folder = (IShellFolder)f;
+            try
+            {
+                Guid iid = Shell32.IID_IDropTarget;
+                folder.GetUIObjectOf(hwnd, 1, [child], ref iid, IntPtr.Zero, out var dt);
+                return dt as IShellDropTarget;
+            }
+            catch (COMException) { return null; }
+            finally { Marshal.ReleaseComObject(folder); }
+        }
+        finally { Shell32.CoTaskMemFree(pidl); }
+    }
+
+    /// <summary>The shell's data object for desktop items, as a drag of them carries.</summary>
+    public static ComDataObject? DataObject(IntPtr hwnd, ItemGroup items)
+    {
+        Guid iid = Shell32.IID_IDataObject;
+        try
+        {
+            items.Folder.GetUIObjectOf(hwnd, (uint)items.Pidls.Length, items.Pidls, ref iid, IntPtr.Zero, out var obj);
+            return obj as ComDataObject;
+        }
+        catch (COMException) { return null; }
+    }
+
+    /// <summary>True when the item takes drops (folders, drives, the Recycle Bin, programs), as SFGAO_DROPTARGET says.</summary>
+    public static bool IsDropTarget(DesktopView view, string name)
+    {
+        if (view.Folder == null) return false;
+        var p = view.Pidls([name]);
+        if (p.Length == 0) return false;
+        try
+        {
+            uint attrs = 0x100 /* SFGAO_DROPTARGET */;
+            view.Folder.GetAttributesOf(1, p, ref attrs);
+            return (attrs & 0x100) != 0;
+        }
+        catch (COMException) { return false; }
+        finally { DesktopView.Free(p); }
+    }
+
+    /// <summary>True for shortcuts, which get the arrow overlay (SFGAO_LINK).</summary>
+    public static bool IsLink(string parsingName)
+    {
+        if (parsingName.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) || parsingName.EndsWith(".url", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    /// <summary>The shortcut-arrow overlay at <paramref name="px"/> pixels, as Windows draws it over a shortcut's icon.</summary>
+    public static Bitmap? LinkOverlay(int px)
+    {
+        var info = new SHSTOCKICONINFO { cbSize = (uint)Marshal.SizeOf<SHSTOCKICONINFO>() };
+        if (SHGetStockIconInfo(29 /* SIID_LINK */, 0x100 /* SHGSI_ICON */ | 0x0 /* large */ , ref info) != 0 || info.hIcon == IntPtr.Zero)
+            return null;
+        try
+        {
+            // The overlay icon at the size asked for, from its own resource (it scales badly from 32 px).
+            if (SHDefExtractIcon(info.szPath, info.iIcon, 0, out var big, out _, (uint)px) == 0 && big != IntPtr.Zero)
+            {
+                try { using var ic = System.Drawing.Icon.FromHandle(big); return ic.ToBitmap(); }
+                finally { DestroyIcon(big); }
+            }
+            using var small = System.Drawing.Icon.FromHandle(info.hIcon);
+            return small.ToBitmap();
+        }
+        finally { DestroyIcon(info.hIcon); }
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct SHSTOCKICONINFO { public uint cbSize; public IntPtr hIcon; public int iSysImageIndex, iIcon; [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szPath; }
+    [DllImport("shell32.dll")] static extern int SHGetStockIconInfo(uint id, uint flags, ref SHSTOCKICONINFO info);
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)] static extern int SHDefExtractIcon(string file, int index, uint flags, out IntPtr large, out IntPtr small, uint size);
+    [DllImport("user32.dll")] static extern bool DestroyIcon(IntPtr h);
+
     /// <summary>Renames through the shell (it keeps extensions hidden the way Explorer does, and handles conflicts).</summary>
     public static bool Rename(IntPtr hwnd, ItemGroup item, string newName)
     {
@@ -202,6 +320,20 @@ static class ShellOps
             return (DragDropEffects)effect;
         }
         finally { Marshal.ReleaseComObject(obj); }
+    }
+
+    /// <summary>The name as Explorer puts it in its rename box (with the extension when it shows extensions).</summary>
+    public static string EditName(string parsingName, string fallback)
+    {
+        try
+        {
+            Guid iid = Shell32.IID_IShellItem;
+            Shell32.SHCreateItemFromParsingName(parsingName, IntPtr.Zero, ref iid, out var o);
+            var si = (IShellItem)o;
+            try { si.GetDisplayName(0x31001 /* SIGDN_PARENTRELATIVEEDITING */, out var n); return n; }
+            finally { Marshal.ReleaseComObject(si); }
+        }
+        catch (Exception ex) when (ex is COMException or ArgumentException or FileNotFoundException) { return fallback; }
     }
 
     /// <summary>The item's name as Explorer shows it (extensions hidden or not, as the user set).</summary>

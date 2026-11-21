@@ -6,7 +6,7 @@ namespace Shelves;
 /// The running app: the tray icon, every shelf window, Explorer's desktop view, and the timers and hooks that
 /// keep shelved icons hidden and shelves above the desktop.
 /// </summary>
-sealed class ShelvesApp : ApplicationContext
+sealed partial class ShelvesApp : ApplicationContext
 {
     public const string ShowMessage = "Shelves.Show", ExitMessage = "Shelves.Exit", ImportMessage = "Shelves.ImportFences", NewShelfMessage = "Shelves.NewShelf";
     /// <summary>Where layout, settings and snapshots live. SHELVES_DATA points a test run somewhere else.</summary>
@@ -60,6 +60,7 @@ sealed class ShelvesApp : ApplicationContext
         Keeper = new IconKeeper(View, () => Layout);
         Keeper.HomesChanged += SaveSoon;
         Keeper.Synced += _ => { RefreshIconRects(); Refresh(); };
+        ShelfWindow.Floor = DesktopFloor;
 
         messages = new MessageWindow(this);
         tray = new NotifyIcon { Icon = AppIcon(), Text = L.T("AppName"), Visible = !shot };
@@ -68,7 +69,7 @@ sealed class ShelvesApp : ApplicationContext
         input = new DesktopInput(messages.Invoker, EmptyDesktopAt, hook: !shot) { Theme = () => Theme };
         input.BoxDrawn += OnBoxDrawn;
         input.DesktopDoubleClick += () => { if (Settings.DoubleClickHides) ToggleHideAll(); };
-        input.IsDesktop = IsDesktopAt;
+        input.IsDesktop = IsExplorerDesktopAt;
         input.ListView = () => View.ListView;
         input.AnyShelved = () => Layout.Shelves.Any(s => s.AllItems.Any());
         input.DesktopRelease += CheckBurst;
@@ -151,6 +152,7 @@ sealed class ShelvesApp : ApplicationContext
             tray.ShowBalloonTip(8000, L.T("AppName"), L.F("MissingItems", missing), ToolTipIcon.Warning);
         }
         if (hiddenAll) Native.ShowWindow(View.ListView, 0);
+        EnsureLayers();
         PlaceAll();
         return true;
     }
@@ -275,6 +277,7 @@ sealed class ShelvesApp : ApplicationContext
         if (TakeOverGrid()) { Keeper.Sync(); Keeper.SnapVisible(); }
         if (Keeper.Check() && Settings.AlignToGrid) Keeper.SnapVisible();
         RefreshIconRects();
+        TickLayers();
         // While the desktop is in front (Show desktop), keep the shelves above it.
         if (DesktopInFront()) PlaceAll();
     }
@@ -350,9 +353,13 @@ sealed class ShelvesApp : ApplicationContext
     }
 
     /// <summary>True when the point is on Explorer's desktop and on no icon (and no icon is being renamed).</summary>
-    bool EmptyDesktopAt(Point p) => IsDesktopAt(p) && !iconRects.Any(r => r.Contains(p)) && !View.Renaming;
+    bool EmptyDesktopAt(Point p) => IsExplorerDesktopAt(p) && !iconRects.Any(r => r.Contains(p)) && !View.Renaming;
 
-    public bool IsDesktopAt(Point p)
+    /// <summary>True when the point is on the desktop: Explorer's, or the icons Shelves draws over it.</summary>
+    public bool IsDesktopAt(Point p) => IsExplorerDesktopAt(p) || LayerAt(p) != null;
+
+    /// <summary>True when the point is on Explorer's own desktop windows (not on Shelves' layer over them).</summary>
+    bool IsExplorerDesktopAt(Point p)
     {
         var h = Native.WindowFromPoint(new Native.POINT { X = p.X, Y = p.Y });
         return h != IntPtr.Zero && (h == View.ListView || h == View.DefView || Native.ClassOf(h) is "Progman" or "WorkerW");
@@ -410,9 +417,18 @@ sealed class ShelvesApp : ApplicationContext
         return w;
     }
 
-    public void PlaceAll() { foreach (var w in Windows) w.PlaceAboveDesktop(); }
+    public void PlaceAll()
+    {
+        // The layers first, right above the desktop, then the shelves above them.
+        foreach (var l in Layers) l.PlaceAboveDesktop();
+        foreach (var w in Windows) w.PlaceAboveDesktop();
+    }
 
-    public void Refresh() { foreach (var w in Windows) w.LoadItems(); }
+    public void Refresh()
+    {
+        foreach (var w in Windows) w.LoadItems();
+        ReloadLayers();
+    }
 
     void OnBoxDrawn(Rectangle r, Point at)
     {
@@ -495,7 +511,8 @@ sealed class ShelvesApp : ApplicationContext
     public void ToggleHideAll()
     {
         hiddenAll = !hiddenAll;
-        if (View.Attached) Native.ShowWindow(View.ListView, hiddenAll ? 0 : 5 /* SW_SHOWNA */);
+        if (View.Attached && !LayerMode) Native.ShowWindow(View.ListView, hiddenAll ? 0 : 5 /* SW_SHOWNA */);
+        foreach (var l in Layers) { if (hiddenAll) l.Hide(); else if (!NoIcons) { l.Show(); l.PlaceAboveDesktop(); } }
         foreach (var w in Windows) { if (hiddenAll) w.Hide(); else { w.Show(); w.PlaceAboveDesktop(); } }
     }
 
@@ -504,6 +521,7 @@ sealed class ShelvesApp : ApplicationContext
         foreach (var w in Windows) w.Relayout();
         Wallpaper.Reset();
         Keeper.Sync();
+        EnsureLayers();
     }
 
     void PreferenceChanged(UserPreferenceCategory c)
@@ -659,6 +677,9 @@ sealed class ShelvesApp : ApplicationContext
         var grid = new ToolStripMenuItem(L.T("AlignToGrid")) { Checked = Settings.AlignToGrid };
         grid.Click += (_, _) => SetAlignToGrid(!Settings.AlignToGrid);
         m.Items.Add(grid);
+        var draw = new ToolStripMenuItem(L.T("DrawDesktop")) { Checked = Settings.DrawDesktop };
+        draw.Click += (_, _) => SetDrawDesktop(!Settings.DrawDesktop);
+        m.Items.Add(draw);
         var startup = new ToolStripMenuItem(L.T("StartWithWindows")) { Checked = Settings.StartWithWindows };
         startup.Click += (_, _) =>
         {
@@ -731,6 +752,8 @@ sealed class ShelvesApp : ApplicationContext
     /// <summary>Puts the desktop back the way Windows had it: every icon visible, auto arrange as it was.</summary>
     public void RestoreExplorer()
     {
+        foreach (var l in Layers) { try { l.Close(); l.Dispose(); } catch { } }
+        Layers.Clear();
         try
         {
             if (!View.Attached) View.Attach();

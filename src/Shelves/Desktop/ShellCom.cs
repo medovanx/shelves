@@ -55,6 +55,28 @@ interface IFolderView2
     void SetGroupBy(); void GetGroupBy(); void SetViewProperty(); void GetViewProperty(); void SetTileViewProperties(); void SetExtendedTileViewProperties(); void SetText();
     void SetCurrentFolderFlags(uint mask, uint flags);
     void GetCurrentFolderFlags(out uint flags);
+    void GetSortColumnCount(); void SetSortColumns(); void GetSortColumns(); void GetItem(); void GetVisibleItem();
+    void GetSelectedItem(); void GetSelection(); void GetSelectionState(); void InvokeVerbOnSelection(); void SetViewModeAndIconSize();
+    void GetViewModeAndIconSize(out uint mode, out int size);
+}
+
+/// <summary>The desktop's view, for its background menu (the one a right-click on empty desktop shows).</summary>
+[ComImport, Guid("000214E3-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IShellView
+{
+    void GetWindow(); void ContextSensitiveHelp(); void TranslateAccelerator(); void EnableModeless(); void UIActivate(); void Refresh();
+    void CreateViewWindow(); void DestroyViewWindow(); void GetCurrentInfo(); void AddPropertySheetPages(); void SaveViewState(); void SelectItem();
+    void GetItemObject(uint item, ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
+}
+
+/// <summary>A shell drop target: a folder, the Recycle Bin, a program (files dropped on it open with it).</summary>
+[ComImport, Guid("00000122-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IShellDropTarget
+{
+    [PreserveSig] int DragEnter(System.Runtime.InteropServices.ComTypes.IDataObject data, uint keys, Native.POINT pt, ref uint effect);
+    [PreserveSig] int DragOver(uint keys, Native.POINT pt, ref uint effect);
+    [PreserveSig] int DragLeave();
+    [PreserveSig] int Drop(System.Runtime.InteropServices.ComTypes.IDataObject data, uint keys, Native.POINT pt, ref uint effect);
 }
 
 [ComImport, Guid("43826d1e-e718-42ee-bc55-a1e261c37bfe"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -158,6 +180,7 @@ static class Shell32
     [StructLayout(LayoutKind.Sequential)]
     public struct DIBSECTION { public BITMAP dsBm; public BITMAPINFOHEADER dsBmih; public uint f0, f1, f2; public IntPtr dshSection; public uint dsOffset; }
 
+    public static readonly Guid IID_IDropTarget = new("00000122-0000-0000-C000-000000000046");
     public static readonly Guid IID_IShellFolder = new("000214E6-0000-0000-C000-000000000046");
     public static readonly Guid IID_IContextMenu = new("000214e4-0000-0000-c000-000000000046");
     public static readonly Guid IID_IDataObject = new("0000010e-0000-0000-C000-000000000046");

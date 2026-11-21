@@ -347,6 +347,8 @@ sealed partial class ShelfWindow
         using var group = Group(names);
         if (group == null) return;
         app.Keeper.Paused = true;
+        // Desktop icons dropped back on the desktop Shelves draws: the drop only takes them out of the shelf.
+        if (Model.Portal == null) DesktopLayer.ShelfDrag = true;
         try
         {
             ShellOps.Drag(Handle, group);
@@ -369,6 +371,7 @@ sealed partial class ShelfWindow
         }
         finally
         {
+            DesktopLayer.ShelfDrag = false;
             app.Keeper.Paused = false;
             app.Refresh();
         }

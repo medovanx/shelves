@@ -92,6 +92,7 @@ public static class L
         ["DesktopMenu"] = ("Add \"New shelf\" to the desktop's right-click menu", "إضافة \"رف جديد\" إلى قائمة سطح المكتب"),
         ["DesktopMenuFailed"] = ("The desktop menu entry needs administrator rights, and Windows did not give them. Nothing was changed.",
                                  "يحتاج عنصر قائمة سطح المكتب إلى صلاحيات المسؤول، ولم يمنحها ويندوز. لم يتغير شيء."),
+        ["DrawDesktop"] = ("Shelves draws the desktop icons", "الرفوف ترسم أيقونات سطح المكتب"),
         ["AlignToGrid"] = ("Align icons to grid", "محاذاة الأيقونات إلى الشبكة"),
         ["DoubleClickHides"] = ("Double-click the desktop to hide everything", "النقر المزدوج على سطح المكتب يخفي كل شيء"),
         ["Opacity"] = ("Opacity (%)", "العتامة (%)"),
