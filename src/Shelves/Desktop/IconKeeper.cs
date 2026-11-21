@@ -208,6 +208,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
         var taken = items.Where(i => !DesktopView.IsParked(i.Pos)).Select(i => i.Pos).ToList();
         var to = listViewPos ?? (l.Home.TryGetValue(name, out var h) && !taken.Contains(h) && OnScreen(h) ? h : FreeSpot(taken));
         view.Move(it.Index, to);
+        view.SaveState();
         l.Home.Remove(name);
         lastParked = Math.Max(0, lastParked - 1);
         HomesChanged?.Invoke();
@@ -261,6 +262,7 @@ sealed class IconKeeper(DesktopView view, Func<Layout> layout)
             view.Move(it.Index, to);
             moved++;
         }
+        if (moved > 0) view.SaveState();
         return moved;
     }
 

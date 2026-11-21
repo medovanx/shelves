@@ -242,6 +242,8 @@ sealed partial class ShelvesApp
             View.Move(moving[k].Index, p);
             Layout.Home.Remove(moving[k].Name);
         }
+        // Explorer keeps moves only once it saves them; a Refresh would otherwise put the icons back.
+        View.SaveState();
         ReloadLayers();
     }
 

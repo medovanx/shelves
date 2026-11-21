@@ -117,6 +117,16 @@ sealed class DesktopView : IDisposable
         }
     }
 
+    /// <summary>
+    /// Has Explorer save the icon positions it holds now. Moves made through list-view messages are only in its
+    /// list until it saves; a Refresh (or a restart) reloads what was saved, undoing them.
+    /// </summary>
+    public void SaveState()
+    {
+        try { ShellView?.SaveViewState(); }
+        catch (Exception ex) when (ex is COMException or InvalidCastException) { Log.Error(ex); }
+    }
+
     /// <summary>Ends an in-place rename Explorer started (after "New folder" it waits for a name in its own list).</summary>
     public void CancelEdit() { if (ListView != IntPtr.Zero) Send(0x10B3 /* LVM_CANCELEDITLABEL */, 0, 0); }
 

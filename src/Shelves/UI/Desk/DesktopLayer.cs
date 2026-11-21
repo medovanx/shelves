@@ -354,7 +354,7 @@ sealed partial class DesktopLayer : Form
             g.FillRectangle(mb, mr);
             g.DrawRectangle(mp, mr.X, mr.Y, mr.Width - 1, mr.Height - 1);
         }
-        if (newShelfBox is { } nb && nb.IntersectsWith(area))
+        if (newShelfBox is { } nb && nb.Width > 4 && nb.Height > 4 && nb.IntersectsWith(area))
         {
             var t = app.Theme;
             using var fill = new SolidBrush(Color.FromArgb(60, t.Accent));
