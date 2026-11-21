@@ -288,6 +288,13 @@ sealed class ShelvesApp : ApplicationContext
         return h != IntPtr.Zero && (h == View.ListView || h == View.DefView || Native.ClassOf(h) is "Progman" or "WorkerW");
     }
 
+    /// <summary>The shelf whose window is under a screen point (as drawn now, rolled or open), or null.</summary>
+    public ShelfWindow? ShelfAt(Point p)
+    {
+        var h = Native.WindowFromPoint(new Native.POINT { X = p.X, Y = p.Y });
+        return Windows.FirstOrDefault(w => w.IsHandleCreated && w.Handle == h);
+    }
+
     public bool IsDesktopItem(string name) => Keeper.Last.Any(i => string.Equals(i.Name, name, StringComparison.OrdinalIgnoreCase));
 
     static bool FencesRunning()

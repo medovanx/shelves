@@ -5,7 +5,9 @@ namespace Shelves.UI.Shelf;
 
 sealed partial class ShelfWindow
 {
-    enum DragKind { None, TitlePending, Move, Resize, ItemPending, Marquee, TabPending, TabMove }
+    enum DragKind { None, TitlePending, Move, Resize, ItemPending, Marquee, TabPending, TabMove, ItemOut }
+    DragGhost? ghost;
+    List<string> outNames = [];
     int draggedTab = -1;
     [Flags] enum Edges { None = 0, Left = 1, Top = 2, Right = 4, Bottom = 8 }
 
@@ -154,9 +156,26 @@ sealed partial class ShelfWindow
                 ResizeTo(now);
                 return;
             case DragKind.ItemPending when moved:
-                drag = DragKind.None;
-                Capture = false;
-                DragOut();
+                // Desktop icons are dragged by Shelves itself while they stay over the desktop or a shelf, so
+                // nothing is moved on disk; folder (portal) files are real files and get the shell's own drag.
+                if (Model.Portal != null) { drag = DragKind.None; Capture = false; DragOut(); return; }
+                outNames = SelectedNames();
+                if (outNames.Count == 0) { drag = DragKind.None; Capture = false; return; }
+                drag = DragKind.ItemOut;
+                app.Keeper.Paused = true;
+                ghost = new DragGhost(outNames, IconPx, S);
+                ghost.MoveTo(now);
+                return;
+            case DragKind.ItemOut:
+                ghost?.MoveTo(now);
+                // Over another app (an Explorer window, a chat): hand the drag to the shell, button still held.
+                if (!app.IsDesktopAt(now) && app.ShelfAt(now) == null)
+                {
+                    EndGhost();
+                    drag = DragKind.None;
+                    Capture = false;
+                    DragOut();
+                }
                 return;
             case DragKind.Marquee:
             {
@@ -217,6 +236,10 @@ sealed partial class ShelfWindow
             case DragKind.TabPending:
                 draggedTab = -1;
                 break;
+            case DragKind.ItemOut:
+                EndGhost();
+                DropOut(Cursor.Position);
+                return;
         }
         if (e.Button == MouseButtons.Right && TabAt(e.Location) is var rt and >= 0)
         {
@@ -349,6 +372,71 @@ sealed partial class ShelfWindow
             app.Keeper.Paused = false;
             app.Refresh();
         }
+    }
+
+    void EndGhost()
+    {
+        ghost?.Close();
+        ghost?.Dispose();
+        ghost = null;
+        app.Keeper.Paused = false;
+    }
+
+    /// <summary>The end of Shelves' own drag: onto the desktop (the icons come out there) or into a shelf.</summary>
+    void DropOut(Point screen)
+    {
+        var names = outNames.ToList();
+        outNames = [];
+        try
+        {
+            if (app.ShelfAt(screen) is { } target)
+            {
+                if (target == this && !target.IsOpenAt(screen)) return;
+                target.TakeShelved(names, screen);
+                if (target != this) selected.Clear();
+                return;
+            }
+            if (!app.IsDesktopAt(screen)) return;
+            var origin = app.View.Origin;
+            var sp = app.View.Spacing;
+            int i = 0;
+            foreach (var n in names)
+            {
+                app.Layout.Unshelve(n);
+                int col = i / 6, row = i % 6;
+                app.Keeper.Unhide(n, new Pt(screen.X - origin.X - sp.Width / 2 + col * sp.Width, screen.Y - origin.Y - sp.Height / 3 + row * sp.Height));
+                i++;
+            }
+            selected.Clear();
+            app.SaveSoon();
+            if (app.Settings.AlignToGrid) app.Keeper.SnapVisible();
+        }
+        finally { app.Refresh(); }
+    }
+
+    /// <summary>True when a screen point is over this shelf's open content (not just its title or tab).</summary>
+    public bool IsOpenAt(Point screen) => (IsOpen || peeking) && ToRect(VisibleBox).Contains(screen);
+
+    /// <summary>Desktop icons dropped here by Shelves' own drag: into the shown tab (or the tab under the mouse), at the drop point.</summary>
+    public void TakeShelved(List<string> names, Point screen)
+    {
+        if (Model.Portal != null) return; // a folder shelf holds files, not desktop icons
+        var client = new Point(screen.X - VisibleBox.X, screen.Y - VisibleBox.Y);
+        int onTab = TabAt(client);
+        if (onTab >= 0 && onTab != Model.Active) SelectTab(onTab);
+        int index = onTab >= 0 ? -1 : DropIndex(client);
+        foreach (var n in names)
+        {
+            // Moving within the same shelf: take it out first so the index lands where it was dropped.
+            int at = index;
+            int was = Model.Items.FindIndex(x => string.Equals(x, n, StringComparison.OrdinalIgnoreCase));
+            if (was >= 0 && at > was) at--;
+            app.Layout.Shelve(n, Model, at);
+            if (index >= 0) index = at + 1;
+        }
+        app.Keeper.Sync();
+        app.SaveSoon();
+        app.Refresh();
     }
 
     // ---- Dropping onto the shelf -------------------------------------------------------------------------------
